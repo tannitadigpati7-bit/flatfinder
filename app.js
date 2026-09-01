@@ -1,5 +1,6 @@
 const STORAGE_KEY = "flatfinder.customListings";
 const SEED_URL = "data/listings.json";
+const SHEET_API_URL = (typeof CONFIG !== "undefined" && CONFIG.SHEET_API_URL) || "";
 
 const state = {
   listings: [],
@@ -35,7 +36,31 @@ function saveCustomListings(listings) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(listings));
 }
 
+function normalizeSheetListing(listing) {
+  return {
+    ...listing,
+    distanceKm: listing.distanceKm !== "" ? parseFloat(listing.distanceKm) : null,
+    bhk: parseInt(listing.bhk, 10) || 1,
+    rent: parseFloat(listing.rent) || 0,
+    deposit: parseFloat(listing.deposit) || 0,
+    brokerage: listing.brokerage === true || listing.brokerage === "true" || listing.brokerage === "TRUE",
+    shared: true,
+  };
+}
+
 async function loadListings() {
+  if (SHEET_API_URL) {
+    try {
+      const res = await fetch(SHEET_API_URL);
+      const shared = await res.json();
+      state.listings = shared.map(normalizeSheetListing);
+      render();
+      return;
+    } catch {
+      // fall through to local-only mode if the shared backend is unreachable
+    }
+  }
+
   let seed = [];
   try {
     const res = await fetch(SEED_URL);
@@ -174,7 +199,7 @@ function resetFilters() {
   render();
 }
 
-function addListingFromForm(formData) {
+async function addListingFromForm(formData) {
   const listing = {
     id: `custom-${Date.now()}`,
     title: formData.get("title"),
@@ -189,8 +214,25 @@ function addListingFromForm(formData) {
     source: formData.get("source") || "",
     link: formData.get("link") || "",
     notes: formData.get("notes") || "",
-    custom: true,
   };
+
+  if (SHEET_API_URL) {
+    try {
+      await fetch(SHEET_API_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(formData),
+      });
+    } catch {
+      // best-effort; the listing still gets added locally below so it isn't lost
+    }
+    state.listings.push({ ...listing, shared: true });
+    render();
+    return;
+  }
+
+  listing.custom = true;
   const custom = loadCustomListings();
   custom.push(listing);
   saveCustomListings(custom);
@@ -207,9 +249,9 @@ els.resetFilters.addEventListener("click", resetFilters);
 
 els.addListingBtn.addEventListener("click", () => els.addListingDialog.showModal());
 els.cancelAdd.addEventListener("click", () => els.addListingDialog.close());
-els.addListingForm.addEventListener("submit", (e) => {
+els.addListingForm.addEventListener("submit", async (e) => {
   const formData = new FormData(els.addListingForm);
-  addListingFromForm(formData);
+  await addListingFromForm(formData);
   els.addListingForm.reset();
 });
 
