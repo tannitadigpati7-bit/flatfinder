@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>FlatFinder Capture</title>
+<style>
+  body { width: 340px; font: 13px/1.4 system-ui, sans-serif; margin: 0; padding: 12px; color: #1a1a1a; }
+  h1 { font-size: 14px; margin: 0 0 8px; }
+  .hint { color: #666; font-size: 11px; margin: 0 0 10px; }
+  textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+  label { display: block; margin-top: 8px; font-size: 12px; font-weight: 600; }
+  input[type=text], input[type=number], input[type=url], textarea, select {
+    width: 100%; box-sizing: border-box; padding: 5px 6px; margin-top: 2px;
+    border: 1px solid #ccc; border-radius: 4px; font: inherit;
+  }
+  .row { display: flex; gap: 8px; }
+  .row > div { flex: 1; }
+  .checkbox-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .checkbox-row input { width: auto; }
+  .actions { display: flex; gap: 8px; margin-top: 12px; }
+  button { flex: 1; padding: 7px; border-radius: 4px; border: 1px solid #999; background: #f5f5f5; cursor: pointer; font: inherit; }
+  #save { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+  #status { margin-top: 8px; font-size: 12px; min-height: 16px; }
+  #status.ok { color: #1a7d1a; }
+  #status.err { color: #b3261e; }
+  details { margin-top: 10px; border-top: 1px solid #eee; padding-top: 6px; }
+  summary { cursor: pointer; font-size: 12px; color: #555; }
+  .needs-review { border-color: #e8a319 !important; background: #fffaf0; }
+</style>
+</head>
+<body>
+  <h1>FlatFinder Capture</h1>
+  <p class="hint">Paste text or right-click a selection on any page ("Save selection to FlatFinder"), review the fields below, then save.</p>
+
+  <textarea id="raw" rows="4" placeholder="Paste a group post here to auto-fill the fields below…"></textarea>
+
+  <form id="form">
+    <label>Title <input type="text" id="title"></label>
+    <div class="row">
+      <div><label>Locality <input type="text" id="locality"></label></div>
+      <div><label>BHK <input type="number" id="bhk" step="0.5" min="0"></label></div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Furnishing
+          <select id="furnishing">
+            <option value="">Unknown</option>
+            <option value="full">Fully furnished</option>
+            <option value="semi">Semi furnished</option>
+            <option value="none">Unfurnished</option>
+          </select>
+        </label>
+      </div>
+      <div><label>Rent ₹/mo <input type="number" id="rent" min="0"></label></div>
+    </div>
+    <div class="row">
+      <div><label>Deposit ₹ <input type="number" id="deposit" min="0"></label></div>
+      <div><label>Contact <input type="text" id="contact"></label></div>
+    </div>
+    <label class="checkbox-row"><input type="checkbox" id="brokerage"> Brokerage involved</label>
+    <label>Source <input type="text" id="source"></label>
+    <label>Link <input type="url" id="link"></label>
+    <label>Notes <textarea id="notes" rows="3"></textarea></label>
+
+    <div class="actions">
+      <button type="button" id="reparse">Re-parse from text above</button>
+      <button type="submit" id="save">Save</button>
+    </div>
+    <div id="status"></div>
+  </form>
+
+  <details>
+    <summary>Settings</summary>
+    <label>Sheet API URL <input type="url" id="sheetUrl" placeholder="https://script.google.com/macros/s/.../exec"></label>
+    <button type="button" id="saveSettings">Save settings</button>
+    <div id="settingsStatus" style="margin-top:6px;font-size:11px;color:#666;"></div>
+  </details>
+
+  <script src="parser.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

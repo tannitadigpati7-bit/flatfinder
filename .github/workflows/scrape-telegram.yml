@@ -1,0 +1,29 @@
+name: Scrape public Telegram channels
+
+on:
+  schedule:
+    # Every 30 minutes. Free to run (no paid API involved — just reads
+    # Telegram's own public t.me/s/<channel> preview pages), so this can be
+    # more frequent than the NoBroker workflow.
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (fetch + print only, don't post to the sheet)"
+        type: boolean
+        default: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run scraper
+        env:
+          SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
+          TG_CHANNELS: ${{ vars.TG_CHANNELS }}
+          DRY_RUN: ${{ github.event.inputs.dry_run == 'true' && '1' || '' }}
+        run: python scripts/scrape_telegram.py

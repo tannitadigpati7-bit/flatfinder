@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Save to FlatFinder</title>
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  main.share { max-width: 480px; }
+  #shareForm { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+  #shareForm label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--muted); }
+  #shareForm input, #shareForm select, #shareForm textarea { padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.95rem; font-family: inherit; color: var(--text); }
+  #shareForm label.checkbox-field { flex-direction: row; align-items: center; gap: 8px; }
+  #shareStatus { font-size: 0.85rem; }
+  #shareStatus.ok { color: var(--accent); }
+  #shareStatus.err { color: var(--danger); }
+  .needs-review { border-color: #d99a1c !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Save to FlatFinder</h1>
+  <p class="subtitle">Shared from another app — review before saving</p>
+</header>
+<main class="share">
+  <form id="shareForm">
+    <label>Title <input type="text" id="title" required></label>
+    <label>Locality <input type="text" id="locality"></label>
+    <label>BHK
+      <select id="bhk">
+        <option value="">Unknown</option>
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3+</option>
+      </select>
+    </label>
+    <label>Furnishing
+      <select id="furnishing">
+        <option value="">Unknown</option>
+        <option value="full">Fully furnished</option>
+        <option value="semi">Semi furnished</option>
+        <option value="none">Unfurnished</option>
+      </select>
+    </label>
+    <label>Rent (₹/month) <input type="number" id="rent" min="0"></label>
+    <label>Deposit (₹) <input type="number" id="deposit" min="0"></label>
+    <label class="checkbox-field"><input type="checkbox" id="brokerage"> Brokerage involved</label>
+    <label>Contact <input type="text" id="contact"></label>
+    <label>Source <input type="text" id="source"></label>
+    <label>Link <input type="url" id="link"></label>
+    <label>Notes <textarea id="notes" rows="4"></textarea></label>
+    <button type="submit" id="saveShare" style="padding:10px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-contrast);cursor:pointer;">Save listing</button>
+    <div id="shareStatus"></div>
+  </form>
+</main>
+
+<script src="config.js"></script>
+<script src="parser.js"></script>
+<script>
+  const params = new URLSearchParams(location.search);
+  const sharedText = [params.get("title"), params.get("text"), params.get("url")]
+    .filter(Boolean)
+    .join("\n");
+  const parsed = FlatFinderParser.parse(sharedText, { sourceUrl: params.get("url") || "" });
+
+  const fieldIds = ["title", "locality", "bhk", "furnishing", "rent", "deposit", "contact", "source", "link", "notes"];
+  fieldIds.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = parsed[id] ?? "";
+  });
+  document.getElementById("brokerage").checked = !!parsed.brokerage;
+
+  ["locality", "bhk", "furnishing", "rent", "contact"].forEach((id) => {
+    if (parsed.confidence && parsed.confidence[id] === false) {
+      document.getElementById(id).classList.add("needs-review");
+    }
+  });
+
+  const statusEl = document.getElementById("shareStatus");
+
+  document.getElementById("shareForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const sheetUrl = (typeof CONFIG !== "undefined" && CONFIG.SHEET_API_URL) || "";
+    if (!sheetUrl) {
+      statusEl.textContent = "No shared backend configured — set SHEET_API_URL in config.js first (see README).";
+      statusEl.className = "err";
+      return;
+    }
+    const body = new URLSearchParams({
+      title: document.getElementById("title").value.trim(),
+      locality: document.getElementById("locality").value.trim(),
+      distanceKm: "",
+      bhk: document.getElementById("bhk").value || "1",
+      furnishing: document.getElementById("furnishing").value,
+      rent: document.getElementById("rent").value,
+      deposit: document.getElementById("deposit").value,
+      brokerage: document.getElementById("brokerage").checked ? "true" : "false",
+      contact: document.getElementById("contact").value.trim(),
+      source: document.getElementById("source").value.trim() || "Mobile share",
+      link: document.getElementById("link").value.trim(),
+      notes: document.getElementById("notes").value.trim(),
+    });
+    statusEl.textContent = "Saving…";
+    statusEl.className = "";
+    try {
+      await fetch(sheetUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+      });
+      statusEl.textContent = "Saved. You can close this tab.";
+      statusEl.className = "ok";
+    } catch (err) {
+      statusEl.textContent = "Couldn't reach the sheet — check your connection.";
+      statusEl.className = "err";
+    }
+  });
+</script>
+</body>
+</html>

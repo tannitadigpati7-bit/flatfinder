@@ -21,7 +21,34 @@ const els = {
   addListingDialog: document.getElementById("addListingDialog"),
   addListingForm: document.getElementById("addListingForm"),
   cancelAdd: document.getElementById("cancelAdd"),
+  pasteBox: document.getElementById("pasteBox"),
 };
+
+const REVIEW_FIELD_NAMES = ["locality", "bhk", "furnishing", "rent", "contact"];
+
+function fillFormFromParsed(parsed) {
+  const form = els.addListingForm;
+  ["title", "locality", "bhk", "furnishing", "rent", "deposit", "contact", "source", "link", "notes"].forEach((name) => {
+    const field = form.elements[name];
+    if (field && parsed[name] !== undefined && parsed[name] !== "") field.value = parsed[name];
+  });
+  form.elements.brokerage.checked = !!parsed.brokerage;
+
+  REVIEW_FIELD_NAMES.forEach((name) => {
+    const field = form.elements[name];
+    if (!field) return;
+    const confident = !parsed.confidence || parsed.confidence[name] !== false;
+    field.classList.toggle("needs-review", !confident);
+  });
+}
+
+if (els.pasteBox) {
+  els.pasteBox.addEventListener("input", () => {
+    const raw = els.pasteBox.value.trim();
+    if (!raw || typeof FlatFinderParser === "undefined") return;
+    fillFormFromParsed(FlatFinderParser.parse(raw, {}));
+  });
+}
 
 function loadCustomListings() {
   try {
@@ -172,7 +199,12 @@ function render() {
   if (filtered.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "No listings match these filters yet. Try loosening a filter, or add one you found.";
+    empty.textContent =
+      state.listings.length === 0
+        ? SHEET_API_URL
+          ? "No listings yet — the shared sheet is empty. Add one, or wait for the scrapers to find some."
+          : "No sample data ships with this app anymore. Set up the shared backend (see README) or add a listing you found yourself."
+        : "No listings match these filters yet. Try loosening a filter, or add one you found.";
     els.results.appendChild(empty);
   } else {
     filtered.forEach((listing) => els.results.appendChild(renderCard(listing)));

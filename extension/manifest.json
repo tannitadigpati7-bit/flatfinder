@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "FlatFinder Capture",
+  "version": "1.0.0",
+  "description": "Right-click a flat listing you're reading (Facebook group, WhatsApp Web, anywhere) and save it to your FlatFinder sheet in one step.",
+  "permissions": ["contextMenus", "storage", "notifications"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "FlatFinder Capture"
+  }
+}

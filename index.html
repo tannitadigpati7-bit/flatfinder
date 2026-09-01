@@ -5,11 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FlatFinder — Manyata Tech Park</title>
 <link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 </head>
 <body>
 <header>
   <h1>FlatFinder</h1>
-  <p class="subtitle">1BHK furnished flats near Manyata Tech Park — no brokerage</p>
+  <p class="subtitle">1BHK furnished, no-brokerage flats — Manyata Tech Park, Hebbal, Indiranagar, HSR Layout</p>
 </header>
 
 <main>
@@ -81,6 +83,10 @@
     <h2>Add a listing</h2>
     <p class="hint">Paste in details from a group post or listing site as soon as you see them — this saves it to your browser so it shows up in your search from now on.</p>
 
+    <label>Paste a group post / listing text here to auto-fill the fields below
+      <textarea id="pasteBox" rows="4" placeholder="Paste the raw WhatsApp/Facebook/Telegram post text here…"></textarea>
+    </label>
+
     <label>Title
       <input type="text" name="title" required placeholder="e.g. 1BHK furnished, Hebbal">
     </label>
@@ -135,6 +141,12 @@
 </dialog>
 
 <script src="config.js"></script>
+<script src="parser.js"></script>
 <script src="app.js"></script>
+<script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("service-worker.js").catch(() => {});
+  }
+</script>
 </body>
 </html>

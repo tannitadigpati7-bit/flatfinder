@@ -156,6 +156,10 @@ dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
   color: var(--text);
 }
 #addListingForm label.checkbox-field { flex-direction: row; }
+#addListingForm input.needs-review, #addListingForm select.needs-review {
+  border-color: #d99a1c;
+  background: #fffaf0;
+}
 
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 .dialog-actions button {
