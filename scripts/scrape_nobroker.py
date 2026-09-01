@@ -2,7 +2,7 @@
 """
 Pulls fresh NoBroker rental listings via the Apify actor's public REST API,
 filters them down to what FlatFinder cares about, de-dupes against what's
-already in the shared Google Sheet, and pushes new ones in.
+already in the shared Firebase Realtime Database, and pushes new ones in.
 
 Why Apify instead of scraping NoBroker directly: NoBroker is a JS-heavy
 site and the exact page/API structure couldn't be inspected from the
@@ -21,7 +21,8 @@ covering common naming conventions. Before trusting this in production:
 
 Required environment variables:
   APIFY_TOKEN       - your Apify API token
-  SHEET_API_URL      - the deployed Apps Script Web App URL (see apps-script/Code.gs)
+  FIREBASE_DB_URL   - your Firebase Realtime Database URL (see README.md >
+                      "Setting up the shared backend")
 Optional:
   APIFY_ACTOR_ID     - defaults to "parseforge~nobroker-scraper"; verify the
                        correct actor id/slug on the Apify console yourself,
@@ -32,12 +33,11 @@ Optional:
 import json
 import os
 import sys
-import urllib.parse
 import urllib.request
 
 APIFY_TOKEN = os.environ.get("APIFY_TOKEN", "")
 APIFY_ACTOR_ID = os.environ.get("APIFY_ACTOR_ID", "parseforge~nobroker-scraper")
-SHEET_API_URL = os.environ.get("SHEET_API_URL", "")
+FIREBASE_DB_URL = os.environ.get("FIREBASE_DB_URL", "").rstrip("/")
 DRY_RUN = os.environ.get("DRY_RUN") == "1"
 
 # Best-guess input for the actor. VERIFY against the actor's own "Input" tab
@@ -74,10 +74,10 @@ def pick(item, field):
 
 def http_json(url, data=None, method="GET"):
     if data is not None:
-        body = urllib.parse.urlencode(data).encode() if not isinstance(data, bytes) else data
+        body = json.dumps(data).encode() if isinstance(data, dict) else data
         req = urllib.request.Request(url, data=body, method=method)
         if isinstance(data, dict):
-            req.add_header("Content-Type", "application/x-www-form-urlencoded")
+            req.add_header("Content-Type", "application/json")
     else:
         req = urllib.request.Request(url, method=method)
     with urllib.request.urlopen(req, timeout=30) as resp:
@@ -100,10 +100,11 @@ def fetch_apify_listings():
 
 
 def fetch_existing_links():
-    if not SHEET_API_URL:
+    if not FIREBASE_DB_URL:
         return set()
-    existing = http_json(SHEET_API_URL)
-    return {listing.get("link") for listing in existing if listing.get("link")}
+    # Firebase returns {pushId: {...listing}, ...} — or null if the node is empty.
+    existing = http_json(f"{FIREBASE_DB_URL}/listings.json") or {}
+    return {listing.get("link") for listing in existing.values() if listing.get("link")}
 
 
 def post_listing(listing):
@@ -115,13 +116,13 @@ def post_listing(listing):
         "furnishing": listing.get("furnishing") or "",
         "rent": listing.get("rent") or "",
         "deposit": listing.get("deposit") or "",
-        "brokerage": "false",  # NoBroker listings are no-brokerage by definition
+        "brokerage": False,  # NoBroker listings are no-brokerage by definition
         "contact": listing.get("contact") or "",
         "source": "NoBroker (auto)",
         "link": listing["link"],
         "notes": "Auto-imported from NoBroker",
     }
-    http_json(SHEET_API_URL, data=body, method="POST")
+    http_json(f"{FIREBASE_DB_URL}/listings.json", data=body, method="POST")
 
 
 def main():
@@ -166,7 +167,7 @@ def main():
 
     existing_links = fetch_existing_links()
     new_listings = [l for l in normalized if l["link"] not in existing_links]
-    print(f"{len(new_listings)} new listings not already in the sheet.")
+    print(f"{len(new_listings)} new listings not already in the database.")
 
     for listing in new_listings:
         post_listing(listing)

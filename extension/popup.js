@@ -40,9 +40,9 @@ function setStatus(msg, cls) {
 }
 
 async function loadSettings() {
-  const { sheetUrl } = await chrome.storage.sync.get("sheetUrl");
-  document.getElementById("sheetUrl").value = sheetUrl || "";
-  return sheetUrl || "";
+  const { firebaseDbUrl } = await chrome.storage.sync.get("firebaseDbUrl");
+  document.getElementById("firebaseDbUrl").value = firebaseDbUrl || "";
+  return firebaseDbUrl || "";
 }
 
 async function loadPendingCapture() {
@@ -57,17 +57,17 @@ async function loadPendingCapture() {
 document.getElementById("reparse").addEventListener("click", parseAndFill);
 
 document.getElementById("saveSettings").addEventListener("click", async () => {
-  const url = document.getElementById("sheetUrl").value.trim();
-  await chrome.storage.sync.set({ sheetUrl: url });
+  const url = document.getElementById("firebaseDbUrl").value.trim();
+  await chrome.storage.sync.set({ firebaseDbUrl: url });
   document.getElementById("settingsStatus").textContent = "Saved.";
   setTimeout(() => (document.getElementById("settingsStatus").textContent = ""), 2000);
 });
 
 document.getElementById("form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const sheetUrl = (await chrome.storage.sync.get("sheetUrl")).sheetUrl;
-  if (!sheetUrl) {
-    setStatus("Set your Sheet API URL under Settings first.", "err");
+  const firebaseDbUrl = (await chrome.storage.sync.get("firebaseDbUrl")).firebaseDbUrl;
+  if (!firebaseDbUrl) {
+    setStatus("Set your Firebase Database URL under Settings first.", "err");
     return;
   }
   const data = readForm();
@@ -76,15 +76,15 @@ document.getElementById("form").addEventListener("submit", async (e) => {
     return;
   }
 
-  const body = new URLSearchParams({
+  const body = JSON.stringify({
     title: data.title,
     locality: data.locality,
     distanceKm: "",
-    bhk: data.bhk || "1",
+    bhk: parseFloat(data.bhk) || 1,
     furnishing: data.furnishing,
-    rent: data.rent,
-    deposit: data.deposit,
-    brokerage: data.brokerage ? "true" : "false",
+    rent: parseFloat(data.rent) || "",
+    deposit: parseFloat(data.deposit) || "",
+    brokerage: !!data.brokerage,
     contact: data.contact,
     source: data.source || "Extension capture",
     link: data.link,
@@ -93,17 +93,17 @@ document.getElementById("form").addEventListener("submit", async (e) => {
 
   setStatus("Saving…");
   try {
-    await fetch(sheetUrl, {
+    const res = await fetch(`${firebaseDbUrl}/listings.json`, {
       method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: { "Content-Type": "application/json" },
       body,
     });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     setStatus("Saved to FlatFinder.", "ok");
     document.getElementById("form").reset();
     document.getElementById("raw").value = "";
   } catch (err) {
-    setStatus("Couldn't reach the sheet — check the Sheet API URL in Settings.", "err");
+    setStatus("Couldn't reach the database — check the Firebase URL in Settings.", "err");
   }
 });
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Pulls new flat-rental posts from public Telegram channels' web previews
-(https://t.me/s/<channel>) and pushes matching ones into the shared Google
-Sheet, the same way scrape_nobroker.py does for NoBroker.
+(https://t.me/s/<channel>) and pushes matching ones into the shared Firebase
+Realtime Database, the same way scrape_nobroker.py does for NoBroker.
 
 Why this is fine to fetch: t.me/s/<channel> is Telegram's own public,
 unauthenticated HTML preview of a channel — the same page anyone gets by
@@ -15,7 +15,9 @@ tgme_widget_message_text for the body) was verified directly against a live
 fetch of t.me/s/HousingBangalore before writing this, not guessed at.
 
 Required environment variables:
-  SHEET_API_URL   - the deployed Apps Script Web App URL (see apps-script/Code.gs)
+  FIREBASE_DB_URL - your Firebase Realtime Database URL, e.g.
+                    https://your-project-default-rtdb.firebaseio.com
+                    (see README.md > "Setting up the shared backend")
 Optional:
   TG_CHANNELS     - comma-separated public CHANNEL usernames to check
                     (default: verified-working Bangalore flat-hunting channels)
@@ -42,7 +44,7 @@ import urllib.request
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-SHEET_API_URL = os.environ.get("SHEET_API_URL", "")
+FIREBASE_DB_URL = os.environ.get("FIREBASE_DB_URL", "").rstrip("/")
 DRY_RUN = os.environ.get("DRY_RUN") == "1"
 
 DEFAULT_CHANNELS = "HousingBangalore,housingourbengaluru"
@@ -133,11 +135,11 @@ def extract_listing(channel, post_id, text):
 
     bhk_match = BHK_RE.search(text)
     if bhk_match:
-        bhk = bhk_match.group(1)
+        bhk = float(bhk_match.group(1))
     elif STUDIO_RE.search(text):
-        bhk = "1"
+        bhk = 1
     else:
-        bhk = ""
+        bhk = 1
 
     furnishing = ""
     for pattern, value in FURNISHING_PATTERNS:
@@ -161,11 +163,11 @@ def extract_listing(channel, post_id, text):
         "title": title or f"Listing from Telegram @{channel}",
         "locality": locality.title(),
         "distanceKm": "",
-        "bhk": bhk or "1",
+        "bhk": bhk,
         "furnishing": furnishing,
-        "rent": rent,
-        "deposit": deposit,
-        "brokerage": "false",
+        "rent": rent if rent != "" else "",
+        "deposit": deposit if deposit != "" else "",
+        "brokerage": False,
         "contact": contact,
         "source": f"Telegram @{channel}",
         "link": f"https://t.me/{channel}/{post_id}",
@@ -201,9 +203,9 @@ def fetch_channel_listings(channel):
 
 def http_json(url, data=None, method="GET"):
     if data is not None:
-        body = urllib.parse.urlencode(data).encode()
+        body = json.dumps(data).encode()
         req = urllib.request.Request(url, data=body, method=method)
-        req.add_header("Content-Type", "application/x-www-form-urlencoded")
+        req.add_header("Content-Type", "application/json")
     else:
         req = urllib.request.Request(url, method=method)
     with urllib.request.urlopen(req, timeout=30) as resp:
@@ -211,10 +213,11 @@ def http_json(url, data=None, method="GET"):
 
 
 def fetch_existing_links():
-    if not SHEET_API_URL:
+    if not FIREBASE_DB_URL:
         return set()
-    existing = http_json(SHEET_API_URL)
-    return {listing.get("link") for listing in existing if listing.get("link")}
+    # Firebase returns {pushId: {...listing}, ...} — or null if the node is empty.
+    existing = http_json(f"{FIREBASE_DB_URL}/listings.json") or {}
+    return {listing.get("link") for listing in existing.values() if listing.get("link")}
 
 
 def main():
@@ -234,16 +237,16 @@ def main():
             print(json.dumps(listing, indent=2, ensure_ascii=False))
         return
 
-    if not SHEET_API_URL:
-        print("SHEET_API_URL not set, aborting.", file=sys.stderr)
+    if not FIREBASE_DB_URL:
+        print("FIREBASE_DB_URL not set, aborting.", file=sys.stderr)
         sys.exit(1)
 
     existing_links = fetch_existing_links()
     new_listings = [l for l in all_listings if l["link"] not in existing_links]
-    print(f"{len(new_listings)} new listing(s) not already in the sheet.")
+    print(f"{len(new_listings)} new listing(s) not already in the database.")
 
     for listing in new_listings:
-        http_json(SHEET_API_URL, data=listing, method="POST")
+        http_json(f"{FIREBASE_DB_URL}/listings.json", data=listing, method="POST")
         print(f"Added: {listing['title']} ({listing['locality']}) — {listing['link']}")
 
 

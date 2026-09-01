@@ -23,7 +23,7 @@ jobs:
           python-version: "3.12"
       - name: Run scraper
         env:
-          SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
+          FIREBASE_DB_URL: ${{ secrets.FIREBASE_DB_URL }}
           TG_CHANNELS: ${{ vars.TG_CHANNELS }}
           DRY_RUN: ${{ github.event.inputs.dry_run == 'true' && '1' || '' }}
         run: python scripts/scrape_telegram.py

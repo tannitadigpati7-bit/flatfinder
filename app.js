@@ -1,6 +1,6 @@
 const STORAGE_KEY = "flatfinder.customListings";
 const SEED_URL = "data/listings.json";
-const SHEET_API_URL = (typeof CONFIG !== "undefined" && CONFIG.SHEET_API_URL) || "";
+const FIREBASE_DB_URL = (typeof CONFIG !== "undefined" && CONFIG.FIREBASE_DB_URL) || "";
 
 const state = {
   listings: [],
@@ -63,24 +63,27 @@ function saveCustomListings(listings) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(listings));
 }
 
-function normalizeSheetListing(listing) {
+function normalizeFirebaseListing(id, listing) {
   return {
     ...listing,
-    distanceKm: listing.distanceKm !== "" ? parseFloat(listing.distanceKm) : null,
+    id,
+    distanceKm: listing.distanceKm !== "" && listing.distanceKm != null ? parseFloat(listing.distanceKm) : null,
     bhk: parseInt(listing.bhk, 10) || 1,
     rent: parseFloat(listing.rent) || 0,
     deposit: parseFloat(listing.deposit) || 0,
-    brokerage: listing.brokerage === true || listing.brokerage === "true" || listing.brokerage === "TRUE",
+    brokerage: listing.brokerage === true || listing.brokerage === "true",
     shared: true,
   };
 }
 
 async function loadListings() {
-  if (SHEET_API_URL) {
+  if (FIREBASE_DB_URL) {
     try {
-      const res = await fetch(SHEET_API_URL);
-      const shared = await res.json();
-      state.listings = shared.map(normalizeSheetListing);
+      const res = await fetch(`${FIREBASE_DB_URL}/listings.json`);
+      const shared = await res.json(); // {pushId: {...}, ...} or null if empty
+      state.listings = Object.entries(shared || {}).map(([id, listing]) =>
+        normalizeFirebaseListing(id, listing)
+      );
       render();
       return;
     } catch {
@@ -201,8 +204,8 @@ function render() {
     empty.className = "empty-state";
     empty.textContent =
       state.listings.length === 0
-        ? SHEET_API_URL
-          ? "No listings yet — the shared sheet is empty. Add one, or wait for the scrapers to find some."
+        ? FIREBASE_DB_URL
+          ? "No listings yet — the shared database is empty. Add one, or wait for the scrapers to find some."
           : "No sample data ships with this app anymore. Set up the shared backend (see README) or add a listing you found yourself."
         : "No listings match these filters yet. Try loosening a filter, or add one you found.";
     els.results.appendChild(empty);
@@ -248,14 +251,16 @@ async function addListingFromForm(formData) {
     notes: formData.get("notes") || "",
   };
 
-  if (SHEET_API_URL) {
+  if (FIREBASE_DB_URL) {
     try {
-      await fetch(SHEET_API_URL, {
+      const { id, ...withoutId } = listing;
+      const res = await fetch(`${FIREBASE_DB_URL}/listings.json`, {
         method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams(formData),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(withoutId),
       });
+      const { name } = await res.json(); // Firebase's generated push id
+      listing.id = name || listing.id;
     } catch {
       // best-effort; the listing still gets added locally below so it isn't lost
     }

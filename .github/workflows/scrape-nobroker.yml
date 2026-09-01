@@ -24,6 +24,6 @@ jobs:
         env:
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           APIFY_ACTOR_ID: ${{ vars.APIFY_ACTOR_ID }}
-          SHEET_API_URL: ${{ secrets.SHEET_API_URL }}
+          FIREBASE_DB_URL: ${{ secrets.FIREBASE_DB_URL }}
           DRY_RUN: ${{ github.event.inputs.dry_run == 'true' && '1' || '' }}
         run: python scripts/scrape_nobroker.py

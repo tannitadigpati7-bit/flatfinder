@@ -81,21 +81,21 @@
 
   document.getElementById("shareForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const sheetUrl = (typeof CONFIG !== "undefined" && CONFIG.SHEET_API_URL) || "";
-    if (!sheetUrl) {
-      statusEl.textContent = "No shared backend configured — set SHEET_API_URL in config.js first (see README).";
+    const dbUrl = (typeof CONFIG !== "undefined" && CONFIG.FIREBASE_DB_URL) || "";
+    if (!dbUrl) {
+      statusEl.textContent = "No shared backend configured — set FIREBASE_DB_URL in config.js first (see README).";
       statusEl.className = "err";
       return;
     }
-    const body = new URLSearchParams({
+    const body = JSON.stringify({
       title: document.getElementById("title").value.trim(),
       locality: document.getElementById("locality").value.trim(),
       distanceKm: "",
-      bhk: document.getElementById("bhk").value || "1",
+      bhk: parseFloat(document.getElementById("bhk").value) || 1,
       furnishing: document.getElementById("furnishing").value,
-      rent: document.getElementById("rent").value,
-      deposit: document.getElementById("deposit").value,
-      brokerage: document.getElementById("brokerage").checked ? "true" : "false",
+      rent: parseFloat(document.getElementById("rent").value) || "",
+      deposit: parseFloat(document.getElementById("deposit").value) || "",
+      brokerage: document.getElementById("brokerage").checked,
       contact: document.getElementById("contact").value.trim(),
       source: document.getElementById("source").value.trim() || "Mobile share",
       link: document.getElementById("link").value.trim(),
@@ -104,16 +104,16 @@
     statusEl.textContent = "Saving…";
     statusEl.className = "";
     try {
-      await fetch(sheetUrl, {
+      const res = await fetch(`${dbUrl}/listings.json`, {
         method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        headers: { "Content-Type": "application/json" },
         body,
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       statusEl.textContent = "Saved. You can close this tab.";
       statusEl.className = "ok";
     } catch (err) {
-      statusEl.textContent = "Couldn't reach the sheet — check your connection.";
+      statusEl.textContent = "Couldn't reach the database — check your connection.";
       statusEl.className = "err";
     }
   });

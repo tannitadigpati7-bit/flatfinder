@@ -41,10 +41,11 @@ every time.
     (empty by default — this app does not ship with fake/sample data) plus
     anything you add, saved only in your own browser via `localStorage`.
   - **Shared backend configured (recommended, see below):** listings come from
-    a Google Sheet everyone (and every capture surface — extension, mobile
-    share, scrapers) reads and writes to — real shared data instead of
-    per-browser storage. **Set this up first** — the extension, mobile share
-    target, and both scrapers all need it to have anywhere to save to.
+    a Firebase Realtime Database everyone (and every capture surface —
+    extension, mobile share, scrapers) reads and writes to — real shared data
+    instead of per-browser storage. **Set this up first** — the extension,
+    mobile share target, and both scrapers all need it to have anywhere to
+    save to.
 
 ## Running it locally
 
@@ -55,42 +56,51 @@ python3 -m http.server 8000
 # then open http://localhost:8000
 ```
 
-## Setting up the shared backend (Google Sheets)
+## Setting up the shared backend (Firebase Realtime Database)
 
 This turns the app from "sample data + your own browser" into "one shared,
-live list everyone you invite can read and add to" — all on your own free
-Google account, no third-party service involved.
+live list everyone you invite can read and add to" — on your own free Google
+account, genuinely free forever at this scale (not a one-time credit).
 
-1. **Create a Google Sheet** (sheets.new). Rename the first tab to `Listings`.
-2. In row 1, add these exact headers, one per column:
+This used to be a Google Sheet fronted by an Apps Script Web App — that
+approach was dropped because Apps Script's per-script "deploy as web app"
+authorization flow is fragile (it's known to loop/fail for some accounts and
+browser configurations) and there's no way to fix that from outside your own
+browser session. Firebase's project-level setup doesn't hit that flow at all.
+
+1. Go to [console.firebase.google.com](https://console.firebase.google.com),
+   sign in, **Create a project** (any name), skip Google Analytics if asked.
+2. Left sidebar → **Build → Realtime Database → Create Database**. Pick any
+   location, choose **Start in test mode**, click **Enable**.
+3. Click the **Rules** tab, replace the contents with:
+   ```json
+   {
+     "rules": {
+       ".read": true,
+       ".write": true
+     }
+   }
    ```
-   id  title  locality  distanceKm  bhk  furnishing  rent  deposit  brokerage  contact  source  link  notes
-   ```
-3. Go to **Extensions → Apps Script**. Delete the placeholder code and paste
-   in the contents of [`apps-script/Code.gs`](apps-script/Code.gs) from this
-   repo. Save (File → Save, or Ctrl+S).
-4. Click **Deploy → New deployment**. For "Select type" choose **Web app**.
-   Set:
-   - Execute as: **Me**
-   - Who has access: **Anyone**
-   Click **Deploy**, and authorize it when prompted (it's your own script, on
-   your own sheet — the warning screen is Google's standard one for any new
-   Apps Script deployment).
-5. Copy the **Web app URL** it gives you.
-6. Paste that URL into `config.js` in this repo:
+   Click **Publish**. (Firebase's default test-mode rules expire after 30
+   days — this makes it permanent. There's no login/auth on reads or writes
+   this way, which is fine for a small personal tool like this but worth
+   knowing: anyone with the URL can write to it.)
+4. Back on the **Data** tab, copy the URL shown near the top — looks like
+   `https://your-project-default-rtdb.firebaseio.com`.
+5. Paste that URL into `config.js` in this repo:
    ```js
    const CONFIG = {
-     SHEET_API_URL: "https://script.google.com/macros/s/XXXXX/exec",
+     FIREBASE_DB_URL: "https://your-project-default-rtdb.firebaseio.com",
    };
    ```
-7. Commit and push. The site will now read and write listings from that
-   sheet — reload the page and the "+ Add a listing" form will save straight
-   to it for everyone.
+6. Commit and push. The site will now read and write listings from that
+   database — reload the page and the "+ Add a listing" form will save
+   straight to it for everyone.
 
 To let other people (flatmates, friends) contribute, just share the site URL
 with them — the "+ Add a listing" button already writes to the same shared
-sheet. You can also open the Google Sheet itself to a trusted few people if
-you'd rather they edit rows directly.
+database. You can also browse/edit the data directly from the **Data** tab in
+the Firebase console.
 
 ### Listing fields
 
@@ -121,7 +131,7 @@ though an automated background scraper against either would not be.
 1. Go to `chrome://extensions`, turn on **Developer mode** (top right).
 2. Click **Load unpacked**, select this repo's `extension/` folder.
 3. Click the FlatFinder icon in your toolbar → **Settings** → paste your
-   Sheet API URL (same one from `config.js`) → **Save settings**.
+   Firebase Database URL (same one from `config.js`) → **Save settings**.
 
 **Use it:**
 
@@ -146,8 +156,8 @@ without switching apps or retyping anything:
 3. A page opens with fields already parsed from the shared text → review →
    **Save listing**.
 
-This needs the shared Google Sheets backend below configured (it saves
-straight to the sheet, there's no per-device local mode here). iOS Safari
+This needs the shared Firebase backend below configured (it saves straight to
+the database, there's no per-device local mode here). iOS Safari
 doesn't support share targets for installed web apps the way Android does —
 on iPhone, copy the post text and paste it into the **+ Add a listing** paste
 box on the main site instead; same parser, one extra tap.
@@ -185,10 +195,10 @@ curl -sI https://t.me/s/<name> | head -1   # 200 = channel, works. 302 = group, 
 
 **Setup:**
 
-1. Set up the shared Google Sheets backend below first — this scraper needs
+1. Set up the shared Firebase backend above first — this scraper needs
    somewhere to save to.
 2. In this repo's **Settings → Secrets and variables → Actions**, add secret
-   `SHEET_API_URL` (the same Apps Script URL from `config.js`).
+   `FIREBASE_DB_URL` (the same URL from `config.js`).
 3. Optionally add repo variable `TG_CHANNELS` (comma-separated channel
    usernames) to use a different list than the default above.
 4. Test it manually first: **Actions → Scrape public Telegram channels → Run
@@ -204,9 +214,8 @@ while building this (network access was blocked in that environment), so
 rather than guess at scraping it blind, this uses **Apify's existing NoBroker
 scraper actor** as a maintained third party that already solved that problem.
 A scheduled GitHub Actions workflow calls it, filters for what you care
-about, and pushes new listings into the same shared Google Sheet — so they
-show up in the app and trigger the same Telegram notification as a manually
-added listing.
+about, and pushes new listings into the same shared Firebase database — so
+they show up in the app alongside everything else.
 
 **Before relying on this, verify it actually works** — the exact input
 parameters and output field names for the Apify actor were not directly
@@ -222,7 +231,8 @@ observable either, so `scripts/scrape_nobroker.py` makes a best-effort guess
    match if they differ from the guesses there.
 3. In this repo's **Settings → Secrets and variables → Actions**:
    - Add secret `APIFY_TOKEN` (from your Apify account's Integrations page).
-   - Add secret `SHEET_API_URL` (the same Apps Script URL from `config.js`).
+   - Add secret `FIREBASE_DB_URL` (the same URL from `config.js` — you've
+     likely already added this for the Telegram scraper above).
    - Optionally add repo variable `APIFY_ACTOR_ID` if it differs from the
      `parseforge~nobroker-scraper` default guessed in the script.
 4. Test it manually first: **Actions → Scrape NoBroker listings → Run
@@ -233,24 +243,17 @@ observable either, so `scripts/scrape_nobroker.py` makes a best-effort guess
    in `.github/workflows/scrape-nobroker.yml` to change the frequency — keep
    it infrequent, each run costs Apify usage credits).
 
-## Telegram notifications
+## Telegram notifications (removed, needs rebuilding)
 
-Once the Google Sheets backend (above) is set up, you can get pinged the
-moment any new listing is added — manually via the site, or by the scraper —
-instead of needing to check the page yourself:
-
-1. Message [@BotFather](https://t.me/BotFather) on Telegram, run `/newbot`,
-   and copy the bot token it gives you.
-2. Message your new bot anything once (so it can message you back), then
-   visit `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` in a browser
-   and find your `chat.id` in the JSON response.
-3. In the Google Sheet's **Extensions → Apps Script** editor, find the
-   `setTelegramConfig_` function, paste in your bot token and chat id, select
-   it in the function dropdown at the top, and click **Run** once. (This
-   stores them in the script's private Script Properties — not in the sheet
-   or the public repo.)
-4. That's it — new rows appended to the sheet (from the web form or the
-   scraper) now trigger a Telegram message automatically.
+This used to work by way of the Apps Script backend (a server-side function
+ran on every new row and pinged a Telegram bot). Now that the backend is a
+plain Firebase database with no server code attached, there's nothing to
+trigger that ping automatically anymore — dropped for now rather than shipped
+half-working. Options if this is wanted back: a lightweight polling script
+(GitHub Actions, checks for new entries every few minutes and calls the
+Telegram Bot API directly), or Firebase Cloud Functions (needs the paid
+"Blaze" plan, which still has a genuine free tier under real usage but does
+require adding a billing method).
 
 ## Ideas for later
 
