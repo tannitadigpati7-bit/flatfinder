@@ -89,9 +89,65 @@ you'd rather they edit rows directly.
 | `link` | URL to the original post, if any |
 | `notes` | Anything else worth remembering |
 
+## Auto-importing NoBroker listings (via Apify)
+
+NoBroker itself has no public API, and its site couldn't be inspected directly
+while building this (network access was blocked in that environment), so
+rather than guess at scraping it blind, this uses **Apify's existing NoBroker
+scraper actor** as a maintained third party that already solved that problem.
+A scheduled GitHub Actions workflow calls it, filters for what you care
+about, and pushes new listings into the same shared Google Sheet — so they
+show up in the app and trigger the same Telegram notification as a manually
+added listing.
+
+**Before relying on this, verify it actually works** — the exact input
+parameters and output field names for the Apify actor were not directly
+observable either, so `scripts/scrape_nobroker.py` makes a best-effort guess
+(see the comments at the top of that file). To check/fix it:
+
+1. Sign up at [apify.com](https://apify.com) (has a free usage tier) and find
+   the NoBroker scraper actor (search "NoBroker" in the Apify Store). Note its
+   exact actor ID from the URL or its "API" tab.
+2. Open its **Input** tab to see the real input schema, and its **Runs →
+   Dataset** on a past run to see real output field names. Update
+   `APIFY_INPUT` and `FIELD_CANDIDATES` in `scripts/scrape_nobroker.py` to
+   match if they differ from the guesses there.
+3. In this repo's **Settings → Secrets and variables → Actions**:
+   - Add secret `APIFY_TOKEN` (from your Apify account's Integrations page).
+   - Add secret `SHEET_API_URL` (the same Apps Script URL from `config.js`).
+   - Optionally add repo variable `APIFY_ACTOR_ID` if it differs from the
+     `parseforge~nobroker-scraper` default guessed in the script.
+4. Test it manually first: **Actions → Scrape NoBroker listings → Run
+   workflow**, with "Dry run" checked. Check the logs — it prints a raw
+   sample item and how many it could normalize. Fix `FIELD_CANDIDATES` and
+   re-run until normalization looks right, *then* uncheck dry run.
+5. Once confirmed, it runs automatically every 2 hours (edit the `cron` line
+   in `.github/workflows/scrape-nobroker.yml` to change the frequency — keep
+   it infrequent, each run costs Apify usage credits).
+
+## Telegram notifications
+
+Once the Google Sheets backend (above) is set up, you can get pinged the
+moment any new listing is added — manually via the site, or by the scraper —
+instead of needing to check the page yourself:
+
+1. Message [@BotFather](https://t.me/BotFather) on Telegram, run `/newbot`,
+   and copy the bot token it gives you.
+2. Message your new bot anything once (so it can message you back), then
+   visit `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` in a browser
+   and find your `chat.id` in the JSON response.
+3. In the Google Sheet's **Extensions → Apps Script** editor, find the
+   `setTelegramConfig_` function, paste in your bot token and chat id, select
+   it in the function dropdown at the top, and click **Run** once. (This
+   stores them in the script's private Script Properties — not in the sheet
+   or the public repo.)
+4. That's it — new rows appended to the sheet (from the web form or the
+   scraper) now trigger a Telegram message automatically.
+
 ## Ideas for later
 
 - Add a "contacted" / "visited" status per listing to track your own progress.
-- Look into whether NoBroker/99acres/MagicBricks offer any official partner
-  API for no-brokerage listings (none are known to offer public access as of
-  writing — this would need direct outreach to confirm).
+- Auto-calculate `distanceKm` from a typed locality via a maps/geocoding API
+  instead of estimating it by hand.
+- Look into whether 99acres/MagicBricks offer a similar Apify actor or
+  official partner API worth adding alongside NoBroker.
