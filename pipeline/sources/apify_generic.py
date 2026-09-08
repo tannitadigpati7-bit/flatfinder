@@ -120,6 +120,17 @@ class ApifyGenericSource(Source):
                 print(f"[apify_generic] {site.site_name} run failed: {err}")
                 continue
 
+            print(f"[apify_generic] {site.site_name}: {len(raw_items)} raw item(s) from the actor")
+            if raw_items:
+                # This actor's real output field names weren't verified before
+                # writing FIELD_CANDIDATES above (no way to inspect the Apify
+                # Store page from this environment) — print one real sample
+                # so a human can check/fix FIELD_CANDIDATES against what the
+                # actor actually returns, same as the old scrape_nobroker.py
+                # script's DRY_RUN mode did.
+                print(f"[apify_generic] {site.site_name} sample raw item (verify FIELD_CANDIDATES against this):")
+                print(json.dumps(raw_items[0], indent=2, ensure_ascii=False, default=str)[:3000])
+
             for item in raw_items:
                 url = _pick(item, "url")
                 source_id = _pick(item, "id") or url
