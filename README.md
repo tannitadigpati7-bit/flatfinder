@@ -24,6 +24,15 @@ assumed to satisfy a hard requirement. A listing only appears under
 Zero confirmed matches is a valid, expected result, and the UI says exactly
 that rather than padding the page with near-misses.
 
+Contact details (phone numbers, WhatsApp links) are deliberately **never
+stored or shown** for scraped listings — `pipeline/listing_schema.py`'s
+`Listing` has no contact field at all, and nothing in the pipeline writes
+one. What every card shows instead is the original source `url` — a "View
+Original Listing" link, or, if a listing genuinely has none (rare — every
+Telegram/Apify-sourced listing carries one; only a hand-typed manual
+capture without a link can lack it), an explicit "No source link
+available" notice. Never silently omitted.
+
 ## Architecture
 
 ```
@@ -38,7 +47,7 @@ Implemented in [`pipeline/`](pipeline/), run on a schedule by
 | Stage | Module | What it does |
 |---|---|---|
 | Discovery | `pipeline/sources/*.py` | Each source implements one `discover()` method returning raw listings (original text + URL, nothing else guessed). Add a source by subclassing `sources.base.Source`. |
-| Raw storage / freshness | `pipeline/store.py` | Persists to Firebase, tracking `first_seen`/`last_seen`/`last_verified`/`source_status` per listing. |
+| Raw storage / freshness | `pipeline/store.py` | Upserts to Supabase per listing (never a destructive full-table overwrite), tracking `first_seen`/`last_seen`/`last_verified`/`source_status`. |
 | Extraction | `pipeline/extraction.py` | Deterministic regex parsing into BHK, rent, deposit, furnishing, lift, brokerage, owner status, location, available-from. Leaves a field `None` rather than guessing. |
 | Validation | `pipeline/validation.py` | Sanity-bounds values (e.g. a "rent" of ₹7 is a mis-parse, not a real rent) — out-of-range becomes UNKNOWN, not clamped-and-kept. |
 | Geocoding | `pipeline/geocode.py` | Nominatim (OpenStreetMap), cached, rate-limited to its usage policy. |
@@ -75,7 +84,7 @@ pre-approved just because a human typed it in.
 ```bash
 cd pipeline
 python3 run.py --dry-run     # discover + process, print a sample, write nothing
-python3 run.py                # writes confirmed/needs_verification/rejected listings to Firebase
+python3 run.py                # writes confirmed/needs_verification/rejected listings to Supabase
 ```
 
 No third-party Python packages required — stdlib only.
@@ -88,29 +97,48 @@ cd pipeline
 python3 tests/test_pipeline_offline.py
 ```
 
-## Setting up the shared backend (Firebase Realtime Database)
+## Setting up the shared backend (Supabase)
 
 Same backend the site, extension, share target, and pipeline all read/write
-to — genuinely free at this scale.
+to — genuinely free at this scale. Postgres under the hood via
+[`supabase/schema.sql`](supabase/schema.sql), instead of the schemaless
+Firebase Realtime Database this used to run on (migrated because the
+listing data is fully structured — typed rent/deposit/commute fields,
+`match_status` — which Postgres + row-level security fits better than a
+JSON blob with open read/write rules).
 
-1. Go to [console.firebase.google.com](https://console.firebase.google.com),
-   sign in, **Create a project**, skip Google Analytics if asked.
-2. Left sidebar → **Build → Realtime Database → Create Database**. Pick any
-   location, **Start in test mode**, click **Enable**.
-3. **Rules** tab → replace with:
-   ```json
-   { "rules": { ".read": true, ".write": true } }
-   ```
-   **Publish**. (No auth on reads/writes — fine for a personal tool, but
-   anyone with the URL can write to it.)
-4. **Data** tab → copy the URL (`https://your-project-default-rtdb.firebaseio.com`).
-5. Paste it into `config.js`:
+1. Go to [supabase.com](https://supabase.com), sign in, **New project**
+   (any name/region; note the database password it generates, though this
+   setup doesn't need it directly).
+2. **SQL Editor → New query** → paste the entire contents of
+   [`supabase/schema.sql`](supabase/schema.sql) → **Run**. This creates the
+   `listings` table with row-level security already configured:
+   - **Public read** — the site/extension/share target need this to show
+     listings.
+   - **Public insert** — lets manually captured listings (paste box,
+     extension, mobile share) save without exposing a privileged key in the
+     browser.
+   - **No public update/delete** — once a row exists, only the pipeline
+     (via its service-role key, which bypasses RLS) can change it. This is
+     tighter than the old Firebase rules, which allowed anyone with the URL
+     to edit or delete any row.
+3. **Project Settings → API** → copy the **Project URL** and the **anon
+   public** key.
+4. Paste both into `config.js` (and `extension/config.js` — keep them in
+   sync, same as `parser.js`):
    ```js
-   const CONFIG = { FIREBASE_DB_URL: "https://your-project-default-rtdb.firebaseio.com", ... };
+   const CONFIG = { SUPABASE_URL: "https://your-project.supabase.co", SUPABASE_ANON_KEY: "eyJ...", ... };
    ```
-6. In this repo's **Settings → Secrets and variables → Actions**, add secret
-   `FIREBASE_DB_URL` with the same value (the pipeline workflow needs it).
-7. Commit and push.
+   The anon key is safe to ship in client-side code — RLS is what actually
+   enforces what it can do (read everything, insert new rows, nothing
+   else).
+5. Same **Project Settings → API** page → copy the **service_role** key.
+   **Never** put this in `config.js` or anywhere the browser loads — it
+   bypasses RLS entirely. In this repo's **Settings → Secrets and variables
+   → Actions**, add two secrets: `SUPABASE_URL` (same value as above) and
+   `SUPABASE_SERVICE_ROLE_KEY` (the service_role key). Only the scheduled
+   pipeline workflow uses this.
+6. Commit and push.
 
 Listings live under the `pipeline_listings` node, shaped like
 [`pipeline/listing_schema.py`](pipeline/listing_schema.py)'s `Listing`
@@ -164,9 +192,10 @@ at, which is why it's fine for Facebook and WhatsApp Web even though an
 automated background scraper against either would not be.
 
 **Install (unpacked):**
-1. `chrome://extensions` → **Developer mode** → **Load unpacked** → select
+1. Edit `extension/config.js` with your `SUPABASE_URL`/`SUPABASE_ANON_KEY`
+   (same values as the main site's `config.js`).
+2. `chrome://extensions` → **Developer mode** → **Load unpacked** → select
    `extension/`.
-2. Toolbar icon → **Settings** → paste your Firebase Database URL → **Save**.
 
 **Use:** select a post's text on any page → right-click → **Save selection
 to FlatFinder**, or click the toolbar icon and paste → review the
@@ -183,7 +212,7 @@ Installable as a PWA, which adds it to Android's **Share** menu.
 2. In WhatsApp/Facebook/Telegram, **Share** a post → **FlatFinder**.
 3. Review the auto-filled, hard-filtered fields → **Save listing**.
 
-Needs the shared Firebase backend configured. iOS Safari doesn't support
+Needs the shared Supabase backend configured. iOS Safari doesn't support
 share targets for installed web apps — copy the post text into the
 **+ Add a listing** paste box on the main site instead.
 

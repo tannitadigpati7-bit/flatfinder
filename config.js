@@ -4,9 +4,14 @@
 // apply the exact same hard filter, just against different discovery paths
 // (scheduled scrapers vs. a listing you paste in yourself).
 const CONFIG = {
-  // Paste your Firebase Realtime Database URL here to enable a shared, live
-  // listings database (see README.md > "Setting up the shared backend").
-  FIREBASE_DB_URL: "https://flatfinder-6f65e-default-rtdb.firebaseio.com",
+  // Paste your Supabase project URL and anon (public) key here to enable a
+  // shared, live listings database (see README.md > "Setting up the shared
+  // backend"). The anon key is safe to ship in client-side code — it can
+  // only do what supabase/schema.sql's row-level-security policies allow
+  // (read everything, insert new rows; never update or delete). Never put
+  // your service_role key here.
+  SUPABASE_URL: "",
+  SUPABASE_ANON_KEY: "",
 
   OFFICE_NAME: "Bathla Aluminium Corporate Office",
   OFFICE_ADDRESS: "Bathla Aluminium Corporate Office, Vasanth Nagar, Bangalore, Karnataka, India",

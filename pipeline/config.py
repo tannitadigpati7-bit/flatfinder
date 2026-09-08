@@ -25,8 +25,13 @@ OFFICE_ADDRESS = "Bathla Aluminium Corporate Office, Vasanth Nagar, Bangalore, K
 # when a key isn't configured, it never fakes the result) ------------------
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 APIFY_TOKEN = os.environ.get("APIFY_TOKEN", "")
-FIREBASE_DB_URL = os.environ.get("FIREBASE_DB_URL", "").rstrip("/")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+# Supabase — the pipeline writes with the service_role key, which bypasses
+# row-level security entirely (see supabase/schema.sql). Never put this key
+# anywhere client-side; only the public anon key belongs in config.js.
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
 NOMINATIM_USER_AGENT = "FlatFinder-Personal/1.0 (single-user rental search; contact via GitHub repo)"
 

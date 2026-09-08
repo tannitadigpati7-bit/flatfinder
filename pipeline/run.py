@@ -8,9 +8,10 @@ Pipeline orchestrator — runs every stage in order:
 
 Run with: python pipeline/run.py [--dry-run]
 
-Requires FIREBASE_DB_URL (unless --dry-run). GOOGLE_MAPS_API_KEY and Apify
-env vars are optional — the pipeline runs and is honest about what it
-couldn't compute without them (see commute.py, sources/apify_generic.py).
+Requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (unless --dry-run).
+GOOGLE_MAPS_API_KEY and Apify env vars are optional — the pipeline runs and
+is honest about what it couldn't compute without them (see commute.py,
+sources/apify_generic.py).
 """
 
 import argparse
@@ -113,8 +114,8 @@ def run(dry_run: bool = False) -> int:
             print("(none confirmed this run)")
         return 0
 
-    if not config.FIREBASE_DB_URL:
-        print("[run] FIREBASE_DB_URL not set — nothing to write to. Aborting.", file=sys.stderr)
+    if not config.SUPABASE_URL or not config.SUPABASE_SERVICE_ROLE_KEY:
+        print("[run] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set — nothing to write to. Aborting.", file=sys.stderr)
         return 1
 
     # RAW STORAGE freshness merge (first_seen/last_seen/source_status)

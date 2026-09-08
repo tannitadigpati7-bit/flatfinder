@@ -76,6 +76,7 @@
 <script src="parser.js"></script>
 <script src="geo-client.js"></script>
 <script src="filter-client.js"></script>
+<script src="supabase-client.js"></script>
 <script>
   const params = new URLSearchParams(location.search);
   const sharedText = [params.get("title"), params.get("text"), params.get("url")].filter(Boolean).join("\n");
@@ -100,9 +101,8 @@
 
   document.getElementById("shareForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const dbUrl = (typeof CONFIG !== "undefined" && CONFIG.FIREBASE_DB_URL) || "";
-    if (!dbUrl) {
-      statusEl.textContent = "No shared backend configured — set FIREBASE_DB_URL in config.js first (see README).";
+    if (!window.FlatFinderSupabase.isConfigured()) {
+      statusEl.textContent = "No shared backend configured — set SUPABASE_URL/SUPABASE_ANON_KEY in config.js first (see README).";
       statusEl.className = "err";
       return;
     }
@@ -155,12 +155,7 @@
     matchEl.className = stored.match_status;
 
     try {
-      const res = await fetch(`${dbUrl}/pipeline_listings.json`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(stored),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await window.FlatFinderSupabase.insertListing(stored);
       statusEl.textContent = "Saved. You can close this tab.";
       statusEl.className = "ok";
     } catch (err) {

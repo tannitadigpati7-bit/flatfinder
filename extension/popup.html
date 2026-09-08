@@ -99,17 +99,13 @@
     <div id="status"></div>
   </form>
 
-  <details>
-    <summary>Settings</summary>
-    <label>Firebase Database URL <input type="url" id="firebaseDbUrl" placeholder="https://your-project-default-rtdb.firebaseio.com"></label>
-    <button type="button" id="saveSettings">Save settings</button>
-    <div id="settingsStatus" style="margin-top:6px;font-size:11px;color:#666;"></div>
-  </details>
+  <p class="hint">Backend: reads SUPABASE_URL/SUPABASE_ANON_KEY from this extension's config.js — edit that file and reload the unpacked extension to point it at your own Supabase project (see README).</p>
 
   <script src="config.js"></script>
   <script src="parser.js"></script>
   <script src="geo-client.js"></script>
   <script src="filter-client.js"></script>
+  <script src="supabase-client.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -42,12 +42,6 @@ function setStatus(msg, cls) {
   el.className = cls || "";
 }
 
-async function loadSettings() {
-  const { firebaseDbUrl } = await chrome.storage.sync.get("firebaseDbUrl");
-  document.getElementById("firebaseDbUrl").value = firebaseDbUrl || "";
-  return firebaseDbUrl || "";
-}
-
 async function loadPendingCapture() {
   const { pendingCapture } = await chrome.storage.local.get("pendingCapture");
   if (!pendingCapture) return;
@@ -60,18 +54,10 @@ async function loadPendingCapture() {
 
 document.getElementById("reparse").addEventListener("click", parseAndFill);
 
-document.getElementById("saveSettings").addEventListener("click", async () => {
-  const url = document.getElementById("firebaseDbUrl").value.trim();
-  await chrome.storage.sync.set({ firebaseDbUrl: url });
-  document.getElementById("settingsStatus").textContent = "Saved.";
-  setTimeout(() => (document.getElementById("settingsStatus").textContent = ""), 2000);
-});
-
 document.getElementById("form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const firebaseDbUrl = (await chrome.storage.sync.get("firebaseDbUrl")).firebaseDbUrl;
-  if (!firebaseDbUrl) {
-    setStatus("Set your Firebase Database URL under Settings first.", "err");
+  if (!window.FlatFinderSupabase.isConfigured()) {
+    setStatus("SUPABASE_URL/SUPABASE_ANON_KEY not set in this extension's config.js.", "err");
     return;
   }
   const data = readForm();
@@ -124,22 +110,16 @@ document.getElementById("form").addEventListener("submit", async (e) => {
   matchEl.className = stored.match_status;
 
   try {
-    const res = await fetch(`${firebaseDbUrl}/pipeline_listings.json`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(stored),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    await window.FlatFinderSupabase.insertListing(stored);
     setStatus("Saved to FlatFinder.", "ok");
     document.getElementById("form").reset();
     document.getElementById("raw").value = "";
     matchEl.textContent = "";
   } catch (err) {
-    setStatus("Couldn't reach the database — check the Firebase URL in Settings.", "err");
+    setStatus("Couldn't reach the database — check SUPABASE_URL/SUPABASE_ANON_KEY in config.js.", "err");
   }
 });
 
 (async function init() {
-  await loadSettings();
   await loadPendingCapture();
 })();
