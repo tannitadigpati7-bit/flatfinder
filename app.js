@@ -1,45 +1,217 @@
-const STORAGE_KEY = "flatfinder.customListings";
-const SEED_URL = "data/listings.json";
-const FIREBASE_DB_URL = (typeof CONFIG !== "undefined" && CONFIG.FIREBASE_DB_URL) || "";
+// FlatFinder — personal rental search for a fixed set of requirements
+// (see config.js). Reads listings the pipeline (pipeline/run.py, scheduled
+// via GitHub Actions) has already discovered, extracted, geocoded, routed,
+// and hard-filtered, and renders them into Confirmed Matches / Needs
+// Verification / Near Matches. Nothing here invents or loosens a match —
+// match_status on each stored listing is authoritative.
 
-const state = {
-  listings: [],
-};
+const REQ = (typeof CONFIG !== "undefined" && CONFIG.REQUIREMENTS) || {};
+const OFFICE_ADDRESS = (typeof CONFIG !== "undefined" && CONFIG.OFFICE_ADDRESS) || "";
+const OFFICE_NAME = (typeof CONFIG !== "undefined" && CONFIG.OFFICE_NAME) || "the office";
+const FIREBASE_DB_URL = (typeof CONFIG !== "undefined" && CONFIG.FIREBASE_DB_URL) || "";
+const LISTINGS_PATH = "pipeline_listings";
+
+const state = { listings: [] };
 
 const els = {
-  search: document.getElementById("search"),
-  bhk: document.getElementById("bhk"),
-  furnishing: document.getElementById("furnishing"),
-  maxRent: document.getElementById("maxRent"),
-  maxDistance: document.getElementById("maxDistance"),
-  noBrokerage: document.getElementById("noBrokerage"),
-  sortBy: document.getElementById("sortBy"),
-  resetFilters: document.getElementById("resetFilters"),
-  results: document.getElementById("results"),
-  resultCount: document.getElementById("resultCount"),
+  confirmed: document.getElementById("confirmedResults"),
+  confirmedCount: document.getElementById("confirmedCount"),
+  needsVerification: document.getElementById("needsVerificationResults"),
+  needsVerificationCount: document.getElementById("needsVerificationCount"),
+  needsVerificationToggle: document.getElementById("needsVerificationToggle"),
+  nearMatches: document.getElementById("nearMatchResults"),
+  nearMatchesSection: document.getElementById("nearMatchesSection"),
+  emptyState: document.getElementById("emptyState"),
   addListingBtn: document.getElementById("addListingBtn"),
   addListingDialog: document.getElementById("addListingDialog"),
   addListingForm: document.getElementById("addListingForm"),
   cancelAdd: document.getElementById("cancelAdd"),
   pasteBox: document.getElementById("pasteBox"),
+  parseStatus: document.getElementById("parseStatus"),
 };
 
-const REVIEW_FIELD_NAMES = ["locality", "bhk", "furnishing", "rent", "contact"];
+// ---------------------------------------------------------------- loading
+
+function normalizeListing(id, listing) {
+  return { ...listing, id };
+}
+
+async function loadListings() {
+  if (!FIREBASE_DB_URL) {
+    state.listings = [];
+    render();
+    return;
+  }
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/${LISTINGS_PATH}.json`);
+    const shared = await res.json(); // {pushId: {...}, ...} or null if empty
+    state.listings = Object.entries(shared || {}).map(([id, listing]) => normalizeListing(id, listing));
+  } catch {
+    state.listings = [];
+  }
+  render();
+}
+
+// --------------------------------------------------------------- rendering
+
+function fmtMoney(n) {
+  return n === null || n === undefined ? "UNKNOWN" : `₹${Number(n).toLocaleString("en-IN")}`;
+}
+
+function furnishingLabel(value) {
+  return { full: "Fully furnished", semi: "Semi-furnished", none: "Unfurnished" }[value] || "Furnishing UNKNOWN";
+}
+
+function timeAgo(iso) {
+  if (!iso) return "";
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(diffMs / 60000);
+  if (mins < 60) return `Listed ${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 48) return `Listed ${hours}h ago`;
+  return `Listed ${Math.round(hours / 24)}d ago`;
+}
+
+const STATUS_LABEL = {
+  active: "Active",
+  possibly_unavailable: "Possibly unavailable",
+  unavailable: "Unavailable",
+  not_recently_verified: "Not recently verified",
+};
+
+function statusBadge(listing) {
+  const label = STATUS_LABEL[listing.source_status] || "Active";
+  return `<span class="status-badge status-${listing.source_status || "active"}">${label}</span>`;
+}
+
+function boolIcon(value) {
+  if (value === true) return "✓";
+  if (value === false) return "✗";
+  return "UNKNOWN";
+}
+
+function renderConfirmedCard(listing) {
+  const card = document.createElement("article");
+  card.className = "card confirmed";
+  card.innerHTML = `
+    <div class="card-top">
+      <div class="rent">${fmtMoney(listing.rent)}/month</div>
+      ${statusBadge(listing)}
+    </div>
+    <div class="deposit">${fmtMoney(listing.deposit)} deposit</div>
+    <div class="tags">
+      <span class="tag">${listing.bhk ?? "?"} BHK</span>
+      <span class="tag">${furnishingLabel(listing.furnishing)}</span>
+      <span class="tag good">Lift ${boolIcon(listing.lift)}</span>
+      <span class="tag good">Brokerage ₹0 ✓</span>
+    </div>
+    <div class="location">📍 ${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</div>
+    <div class="commute">🚗 ${listing.commute_minutes != null ? Math.round(listing.commute_minutes) + " min" : "UNKNOWN"} to ${escapeHtml(OFFICE_NAME)}${listing.commute_source === "google_distance_matrix_traffic" ? " (traffic-aware)" : listing.commute_source === "osrm_driving" ? " (no live traffic)" : ""}</div>
+    <div class="owner-line">${listing.owner_status === "owner" ? "Owner-direct ✓" : "Owner/broker status UNKNOWN"}</div>
+    <div class="meta">
+      ${timeAgo(listing.first_seen)} · via ${escapeHtml(listing.source || "unknown source")}
+      ${listing.merged_sources && listing.merged_sources.length > 1 ? `<br>Also seen on: ${listing.merged_sources.map((s) => escapeHtml(s.source)).join(", ")}` : ""}
+    </div>
+    ${listing.score_reasons && listing.score_reasons.length ? `<div class="why">Ranked for: ${listing.score_reasons.map(escapeHtml).join(" · ")}</div>` : ""}
+    ${listing.url ? `<a class="view-link" href="${escapeAttr(listing.url)}" target="_blank" rel="noopener">View Original Listing</a>` : '<div class="view-link disabled">No source link available</div>'}
+  `;
+  return card;
+}
+
+function renderNeedsVerificationCard(listing) {
+  const card = document.createElement("article");
+  card.className = "card needs-verification";
+  card.innerHTML = `
+    <div class="card-top">
+      <div class="rent">${fmtMoney(listing.rent)}/month</div>
+      ${statusBadge(listing)}
+    </div>
+    <div class="deposit">${fmtMoney(listing.deposit)} deposit</div>
+    <div class="unknowns">Needs verification: ${listing.unknown_fields.map(escapeHtml).join(", ")}</div>
+    <div class="location">📍 ${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</div>
+    <div class="commute">🚗 ${listing.commute_minutes != null ? Math.round(listing.commute_minutes) + " min" : "UNKNOWN"} to ${escapeHtml(OFFICE_NAME)}</div>
+    <div class="meta">${timeAgo(listing.first_seen)} · via ${escapeHtml(listing.source || "unknown source")}</div>
+    ${listing.url ? `<a class="view-link" href="${escapeAttr(listing.url)}" target="_blank" rel="noopener">View Original Listing</a>` : '<div class="view-link disabled">No source link available</div>'}
+  `;
+  return card;
+}
+
+function renderNearMatchCard(listing) {
+  const card = document.createElement("article");
+  card.className = "card near-match";
+  card.innerHTML = `
+    <div class="card-top">
+      <div class="rent">${fmtMoney(listing.rent)}/month</div>
+    </div>
+    <div class="fails">Fails: ${listing.fail_reasons.map(escapeHtml).join("; ")}</div>
+    <div class="location">📍 ${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</div>
+    <div class="meta">via ${escapeHtml(listing.source || "unknown source")}</div>
+    ${listing.url ? `<a class="view-link" href="${escapeAttr(listing.url)}" target="_blank" rel="noopener">View Original Listing</a>` : ""}
+  `;
+  return card;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str ?? "";
+  return div.innerHTML;
+}
+function escapeAttr(str) {
+  return escapeHtml(str).replace(/"/g, "&quot;");
+}
+
+function render() {
+  const confirmed = state.listings
+    .filter((l) => l.match_status === "confirmed")
+    .sort((a, b) => (a.commute_minutes ?? Infinity) - (b.commute_minutes ?? Infinity));
+  const needsVerification = state.listings.filter((l) => l.match_status === "needs_verification");
+  const rejected = state.listings.filter((l) => l.match_status === "rejected");
+
+  els.confirmed.innerHTML = "";
+  confirmed.forEach((l) => els.confirmed.appendChild(renderConfirmedCard(l)));
+  els.confirmedCount.textContent = `${confirmed.length} confirmed match${confirmed.length === 1 ? "" : "es"}`;
+
+  els.needsVerification.innerHTML = "";
+  needsVerification.forEach((l) => els.needsVerification.appendChild(renderNeedsVerificationCard(l)));
+  els.needsVerificationCount.textContent = `${needsVerification.length} listing${needsVerification.length === 1 ? "" : "s"} needing verification`;
+  els.needsVerificationToggle.parentElement.hidden = needsVerification.length === 0;
+
+  els.nearMatches.innerHTML = "";
+  rejected
+    .slice()
+    .sort((a, b) => a.fail_reasons.length - b.fail_reasons.length)
+    .slice(0, 20)
+    .forEach((l) => els.nearMatches.appendChild(renderNearMatchCard(l)));
+  els.nearMatchesSection.hidden = rejected.length === 0;
+
+  els.emptyState.hidden = confirmed.length !== 0;
+  if (confirmed.length === 0) {
+    els.emptyState.textContent = FIREBASE_DB_URL
+      ? "No verified matches found right now."
+      : "No shared backend configured (see README) — nothing has been discovered yet.";
+  }
+}
+
+// ----------------------------------------------------------- add a listing
+
+let officeCoordsPromise = null;
+function getOfficeCoords() {
+  if (!officeCoordsPromise) officeCoordsPromise = window.FlatFinderGeo.geocodeOffice(OFFICE_ADDRESS);
+  return officeCoordsPromise;
+}
 
 function fillFormFromParsed(parsed) {
   const form = els.addListingForm;
-  ["title", "locality", "bhk", "furnishing", "rent", "deposit", "contact", "source", "link", "notes"].forEach((name) => {
-    const field = form.elements[name];
-    if (field && parsed[name] !== undefined && parsed[name] !== "") field.value = parsed[name];
+  const fieldMap = { title: "title", location: "location", bhk: "bhk", furnishing: "furnishing", rent: "rent", deposit: "deposit", contact: "contact", availableFrom: "availableFrom" };
+  Object.entries(fieldMap).forEach(([parsedKey, fieldName]) => {
+    const field = form.elements[fieldName];
+    if (field && parsed[parsedKey] !== null && parsed[parsedKey] !== undefined) field.value = parsed[parsedKey];
   });
-  form.elements.brokerage.checked = !!parsed.brokerage;
-
-  REVIEW_FIELD_NAMES.forEach((name) => {
-    const field = form.elements[name];
-    if (!field) return;
-    const confident = !parsed.confidence || parsed.confidence[name] !== false;
-    field.classList.toggle("needs-review", !confident);
-  });
+  form.elements.lift.value = parsed.lift === true ? "true" : parsed.lift === false ? "false" : "";
+  form.elements.brokerageStatus.value = parsed.brokerageStatus || "";
+  form.elements.ownerStatus.value = parsed.ownerStatus || "";
+  form.dataset.rawText = parsed.rawText || "";
+  form.dataset.sourceUrl = parsed.url || "";
 }
 
 if (els.pasteBox) {
@@ -50,246 +222,86 @@ if (els.pasteBox) {
   });
 }
 
-function loadCustomListings() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveCustomListings(listings) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(listings));
-}
-
-function normalizeFirebaseListing(id, listing) {
-  return {
-    ...listing,
-    id,
-    distanceKm: listing.distanceKm !== "" && listing.distanceKm != null ? parseFloat(listing.distanceKm) : null,
-    bhk: parseInt(listing.bhk, 10) || 1,
-    rent: parseFloat(listing.rent) || 0,
-    deposit: parseFloat(listing.deposit) || 0,
-    brokerage: listing.brokerage === true || listing.brokerage === "true",
-    shared: true,
+async function addListingFromForm(formData, form) {
+  els.parseStatus.textContent = "Geocoding and computing commute…";
+  const parsed = {
+    title: formData.get("title") || null,
+    location: formData.get("location") || null,
+    address: formData.get("location") || null,
+    bhk: formData.get("bhk") ? parseFloat(formData.get("bhk")) : null,
+    furnishing: formData.get("furnishing") || null,
+    lift: formData.get("lift") === "true" ? true : formData.get("lift") === "false" ? false : null,
+    rent: formData.get("rent") ? parseFloat(formData.get("rent")) : null,
+    deposit: formData.get("deposit") ? parseFloat(formData.get("deposit")) : null,
+    brokerageStatus: formData.get("brokerageStatus") || null,
+    brokerageAmount: formData.get("brokerageStatus") === "zero" ? 0 : null,
+    ownerStatus: formData.get("ownerStatus") || null,
+    availableFrom: formData.get("availableFrom") || null,
+    source: formData.get("source") || "Manual capture",
+    url: formData.get("link") || form.dataset.sourceUrl || null,
+    rawText: form.dataset.rawText || null,
   };
-}
 
-async function loadListings() {
-  if (FIREBASE_DB_URL) {
-    try {
-      const res = await fetch(`${FIREBASE_DB_URL}/listings.json`);
-      const shared = await res.json(); // {pushId: {...}, ...} or null if empty
-      state.listings = Object.entries(shared || {}).map(([id, listing]) =>
-        normalizeFirebaseListing(id, listing)
-      );
-      render();
-      return;
-    } catch {
-      // fall through to local-only mode if the shared backend is unreachable
+  let lat = null, lng = null, commuteMinutes = null, commuteSource = null;
+  if (parsed.location) {
+    const officeCoords = await getOfficeCoords();
+    const originCoords = await window.FlatFinderGeo.geocode(parsed.location);
+    if (originCoords) {
+      lat = originCoords.lat;
+      lng = originCoords.lng;
+      if (officeCoords) {
+        const result = await window.FlatFinderGeo.commuteMinutes(originCoords, officeCoords);
+        commuteMinutes = result.minutes;
+        commuteSource = result.source;
+      }
     }
   }
 
-  let seed = [];
-  try {
-    const res = await fetch(SEED_URL);
-    seed = await res.json();
-  } catch {
-    seed = [];
-  }
-  const custom = loadCustomListings();
-  state.listings = [...seed, ...custom];
-  render();
-}
-
-function furnishingLabel(value) {
-  return { full: "Fully furnished", semi: "Semi furnished", none: "Unfurnished" }[value] || value;
-}
-
-function matchesFilters(listing) {
-  const search = els.search.value.trim().toLowerCase();
-  const bhk = els.bhk.value;
-  const furnishing = els.furnishing.value;
-  const maxRent = parseFloat(els.maxRent.value);
-  const maxDistance = parseFloat(els.maxDistance.value);
-  const noBrokerage = els.noBrokerage.checked;
-
-  if (search) {
-    const haystack = `${listing.title} ${listing.locality} ${listing.notes || ""}`.toLowerCase();
-    if (!haystack.includes(search)) return false;
-  }
-  if (bhk) {
-    const wanted = parseInt(bhk, 10);
-    if (wanted === 3) {
-      if (listing.bhk < 3) return false;
-    } else if (listing.bhk !== wanted) {
-      return false;
-    }
-  }
-  if (furnishing && listing.furnishing !== furnishing) return false;
-  if (!Number.isNaN(maxRent) && listing.rent > maxRent) return false;
-  if (!Number.isNaN(maxDistance) && listing.distanceKm > maxDistance) return false;
-  if (noBrokerage && listing.brokerage) return false;
-  return true;
-}
-
-function sortListings(listings) {
-  const sortBy = els.sortBy.value;
-  const copy = [...listings];
-  if (sortBy === "distance") {
-    copy.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
-  } else if (sortBy === "rent") {
-    copy.sort((a, b) => (a.rent ?? Infinity) - (b.rent ?? Infinity));
-  } else if (sortBy === "newest") {
-    copy.reverse();
-  }
-  return copy;
-}
-
-function renderCard(listing) {
-  const card = document.createElement("article");
-  card.className = "card";
-
-  const tags = [
-    `${listing.bhk}BHK`,
-    furnishingLabel(listing.furnishing),
-    listing.brokerage ? "Brokerage" : "No brokerage",
-  ];
-
-  card.innerHTML = `
-    <h3>${escapeHtml(listing.title)}</h3>
-    <div class="locality">${escapeHtml(listing.locality)} · ${listing.distanceKm ?? "?"} km from Manyata</div>
-    <div class="rent">₹${Number(listing.rent || 0).toLocaleString("en-IN")}/mo${listing.deposit ? ` · Deposit ₹${Number(listing.deposit).toLocaleString("en-IN")}` : ""}</div>
-    <div class="tags">
-      ${tags.map((t, i) => `<span class="tag${i === 2 && listing.brokerage ? " brokerage" : ""}">${escapeHtml(String(t))}</span>`).join("")}
-    </div>
-    ${listing.notes ? `<div class="notes">${escapeHtml(listing.notes)}</div>` : ""}
-    <div class="meta">
-      ${listing.contact ? `Contact: ${escapeHtml(listing.contact)}<br>` : ""}
-      ${listing.source ? `Source: ${escapeHtml(listing.source)}` : ""}
-      ${listing.link ? ` · <a href="${escapeAttr(listing.link)}" target="_blank" rel="noopener">Link</a>` : ""}
-      ${listing.availableFrom ? `<br>Available from: ${escapeHtml(listing.availableFrom)}` : ""}
-    </div>
-  `;
-
-  if (listing.custom) {
-    const removeBtn = document.createElement("button");
-    removeBtn.className = "remove";
-    removeBtn.type = "button";
-    removeBtn.textContent = "Remove";
-    removeBtn.addEventListener("click", () => removeListing(listing.id));
-    card.appendChild(removeBtn);
-  }
-
-  return card;
-}
-
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-function escapeAttr(str) {
-  return escapeHtml(str).replace(/"/g, "&quot;");
-}
-
-function render() {
-  const filtered = sortListings(state.listings.filter(matchesFilters));
-  els.results.innerHTML = "";
-
-  if (filtered.length === 0) {
-    const empty = document.createElement("div");
-    empty.className = "empty-state";
-    empty.textContent =
-      state.listings.length === 0
-        ? FIREBASE_DB_URL
-          ? "No listings yet — the shared database is empty. Add one, or wait for the scrapers to find some."
-          : "No sample data ships with this app anymore. Set up the shared backend (see README) or add a listing you found yourself."
-        : "No listings match these filters yet. Try loosening a filter, or add one you found.";
-    els.results.appendChild(empty);
-  } else {
-    filtered.forEach((listing) => els.results.appendChild(renderCard(listing)));
-  }
-
-  els.resultCount.textContent = `${filtered.length} listing${filtered.length === 1 ? "" : "s"} found`;
-}
-
-function removeListing(id) {
-  const custom = loadCustomListings().filter((l) => l.id !== id);
-  saveCustomListings(custom);
-  state.listings = state.listings.filter((l) => l.id !== id);
-  render();
-}
-
-function resetFilters() {
-  els.search.value = "";
-  els.bhk.value = "";
-  els.furnishing.value = "";
-  els.maxRent.value = "";
-  els.maxDistance.value = "";
-  els.noBrokerage.checked = true;
-  els.sortBy.value = "distance";
-  render();
-}
-
-async function addListingFromForm(formData) {
-  const listing = {
-    id: `custom-${Date.now()}`,
-    title: formData.get("title"),
-    locality: formData.get("locality"),
-    distanceKm: parseFloat(formData.get("distanceKm")) || null,
-    bhk: parseInt(formData.get("bhk"), 10),
-    furnishing: formData.get("furnishing"),
-    rent: parseFloat(formData.get("rent")) || 0,
-    deposit: parseFloat(formData.get("deposit")) || 0,
-    brokerage: formData.get("brokerage") === "on",
-    contact: formData.get("contact") || "",
-    source: formData.get("source") || "",
-    link: formData.get("link") || "",
-    notes: formData.get("notes") || "",
-  };
+  const stored = window.FlatFinderFilter.buildStoredListing(parsed, {
+    sourceListingId: `manual-${Date.now()}`,
+    lat, lng, commuteMinutes, commuteSource,
+  });
+  window.FlatFinderFilter.applyHardFilter(stored, REQ);
 
   if (FIREBASE_DB_URL) {
     try {
-      const { id, ...withoutId } = listing;
-      const res = await fetch(`${FIREBASE_DB_URL}/listings.json`, {
+      const res = await fetch(`${FIREBASE_DB_URL}/${LISTINGS_PATH}.json`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(withoutId),
+        body: JSON.stringify(stored),
       });
-      const { name } = await res.json(); // Firebase's generated push id
-      listing.id = name || listing.id;
+      const { name } = await res.json();
+      state.listings.push({ ...stored, id: name });
+      els.parseStatus.textContent = `Saved — ${stored.match_status.replace("_", " ")}.`;
     } catch {
-      // best-effort; the listing still gets added locally below so it isn't lost
+      els.parseStatus.textContent = "Couldn't reach the shared database — not saved.";
+      return;
     }
-    state.listings.push({ ...listing, shared: true });
-    render();
+  } else {
+    els.parseStatus.textContent = "No shared backend configured — set FIREBASE_DB_URL in config.js first.";
     return;
   }
-
-  listing.custom = true;
-  const custom = loadCustomListings();
-  custom.push(listing);
-  saveCustomListings(custom);
-  state.listings.push(listing);
   render();
 }
 
-[els.search, els.bhk, els.furnishing, els.maxRent, els.maxDistance, els.noBrokerage, els.sortBy].forEach((el) => {
-  el.addEventListener("input", render);
-  el.addEventListener("change", render);
-});
+if (els.addListingBtn) {
+  els.addListingBtn.addEventListener("click", () => {
+    els.parseStatus.textContent = "";
+    els.addListingDialog.showModal();
+  });
+  els.cancelAdd.addEventListener("click", () => els.addListingDialog.close());
+  els.addListingForm.addEventListener("submit", async (e) => {
+    const formData = new FormData(els.addListingForm);
+    await addListingFromForm(formData, els.addListingForm);
+  });
+}
 
-els.resetFilters.addEventListener("click", resetFilters);
-
-els.addListingBtn.addEventListener("click", () => els.addListingDialog.showModal());
-els.cancelAdd.addEventListener("click", () => els.addListingDialog.close());
-els.addListingForm.addEventListener("submit", async (e) => {
-  const formData = new FormData(els.addListingForm);
-  await addListingFromForm(formData);
-  els.addListingForm.reset();
-});
+if (els.needsVerificationToggle) {
+  els.needsVerificationToggle.addEventListener("click", () => {
+    const expanded = els.needsVerification.hidden === false;
+    els.needsVerification.hidden = expanded;
+    els.needsVerificationToggle.textContent = expanded ? "Show" : "Hide";
+  });
+}
 
 loadListings();

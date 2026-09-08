@@ -1,0 +1,53 @@
+name: Run FlatFinder discovery pipeline
+
+on:
+  schedule:
+    # Every 30 minutes. Telegram fetches are free; Google/Apify calls only
+    # happen for listings that changed since the geocode/commute caches
+    # already cover most repeats, so this stays cheap even at this cadence.
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (discover + process, don't write to Firebase)"
+        type: boolean
+        default: false
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Cache geocode/commute lookups across runs so re-discovering the same
+      # listing doesn't re-hit Nominatim/OSRM/Google every 30 minutes.
+      - uses: actions/cache@v4
+        with:
+          path: pipeline/.cache
+          key: flatfinder-pipeline-cache
+
+      - name: Run pipeline
+        env:
+          FIREBASE_DB_URL: ${{ secrets.FIREBASE_DB_URL }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          APIFY_SITES: ${{ vars.APIFY_SITES }}
+          APIFY_SITE_NOBROKER_ACTOR_ID: ${{ vars.APIFY_SITE_NOBROKER_ACTOR_ID }}
+          APIFY_SITE_NOBROKER_INPUT: ${{ vars.APIFY_SITE_NOBROKER_INPUT }}
+          APIFY_SITE_HOUSING_ACTOR_ID: ${{ vars.APIFY_SITE_HOUSING_ACTOR_ID }}
+          APIFY_SITE_HOUSING_INPUT: ${{ vars.APIFY_SITE_HOUSING_INPUT }}
+          APIFY_SITE_99ACRES_ACTOR_ID: ${{ vars.APIFY_SITE_99ACRES_ACTOR_ID }}
+          APIFY_SITE_99ACRES_INPUT: ${{ vars.APIFY_SITE_99ACRES_INPUT }}
+          APIFY_SITE_MAGICBRICKS_ACTOR_ID: ${{ vars.APIFY_SITE_MAGICBRICKS_ACTOR_ID }}
+          APIFY_SITE_MAGICBRICKS_INPUT: ${{ vars.APIFY_SITE_MAGICBRICKS_INPUT }}
+          TG_CHANNELS: ${{ vars.TG_CHANNELS }}
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            python pipeline/run.py --dry-run
+          else
+            python pipeline/run.py
+          fi

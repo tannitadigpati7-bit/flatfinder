@@ -4,6 +4,10 @@
   "version": "1.0.0",
   "description": "Right-click a flat listing you're reading (Facebook group, WhatsApp Web, anywhere) and save it to your FlatFinder database in one step.",
   "permissions": ["contextMenus", "storage", "notifications"],
+  "host_permissions": [
+    "https://nominatim.openstreetmap.org/*",
+    "https://router.project-osrm.org/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },

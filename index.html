@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FlatFinder — Manyata Tech Park</title>
+<title>FlatFinder — 1BHK near Bathla Aluminium, Bangalore</title>
 <link rel="stylesheet" href="style.css">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -11,103 +11,78 @@
 <body>
 <header>
   <h1>FlatFinder</h1>
-  <p class="subtitle">1BHK furnished, no-brokerage flats — Manyata Tech Park, Hebbal, Indiranagar, HSR Layout</p>
+  <p class="subtitle">Real, currently available 1BHK rentals in Bangalore — not a filtered listing site, a personal search engine</p>
 </header>
 
 <main>
-  <section class="filters" aria-label="Search filters">
-    <div class="field">
-      <label for="search">Search</label>
-      <input type="text" id="search" placeholder="Locality, title, notes...">
-    </div>
-
-    <div class="field">
-      <label for="bhk">BHK</label>
-      <select id="bhk">
-        <option value="">Any</option>
-        <option value="1">1 BHK</option>
-        <option value="2">2 BHK</option>
-        <option value="3">3+ BHK</option>
-      </select>
-    </div>
-
-    <div class="field">
-      <label for="furnishing">Furnishing</label>
-      <select id="furnishing">
-        <option value="">Any</option>
-        <option value="full">Fully furnished</option>
-        <option value="semi">Semi furnished</option>
-        <option value="none">Unfurnished</option>
-      </select>
-    </div>
-
-    <div class="field">
-      <label for="maxRent">Max rent (₹)</label>
-      <input type="number" id="maxRent" placeholder="e.g. 25000" min="0" step="500">
-    </div>
-
-    <div class="field">
-      <label for="maxDistance">Max distance from Manyata (km)</label>
-      <input type="number" id="maxDistance" placeholder="e.g. 5" min="0" step="0.5">
-    </div>
-
-    <div class="field checkbox-field">
-      <label>
-        <input type="checkbox" id="noBrokerage" checked>
-        No brokerage only
-      </label>
-    </div>
-
-    <div class="field">
-      <label for="sortBy">Sort by</label>
-      <select id="sortBy">
-        <option value="distance">Distance (nearest first)</option>
-        <option value="rent">Rent (lowest first)</option>
-        <option value="newest">Recently added</option>
-      </select>
-    </div>
-
-    <button id="resetFilters" type="button">Reset filters</button>
+  <section class="requirements" aria-label="Fixed search requirements">
+    <h2>Configured requirements</h2>
+    <ul>
+      <li>1 BHK</li>
+      <li>Semi-furnished</li>
+      <li>Rent ≤ ₹15,000/month</li>
+      <li>Deposit ≤ ₹50,000</li>
+      <li>Lift mandatory</li>
+      <li>Brokerage ₹0 (owner-direct preferred)</li>
+      <li>≤ 30 min commute to Bathla Aluminium Corporate Office, Vasanth Nagar</li>
+      <li>Anywhere in Bangalore that meets the commute requirement</li>
+    </ul>
+    <p class="hint">These are fixed, not adjustable filters — every listing shown here is checked against all of them. A listing only appears under "Confirmed Matches" when every one is known and satisfied.</p>
   </section>
 
   <section class="results-header">
-    <h2 id="resultCount">Loading listings…</h2>
-    <button id="addListingBtn" type="button">+ Add a listing</button>
+    <h2 id="confirmedCount">Loading…</h2>
+    <button id="addListingBtn" type="button">+ Add a listing I found</button>
   </section>
 
-  <section id="results" class="results" aria-live="polite"></section>
+  <section id="confirmedResults" class="results" aria-live="polite"></section>
+  <p id="emptyState" class="empty-state" hidden>No verified matches found right now.</p>
+
+  <section class="section-block">
+    <button id="needsVerificationToggle" type="button" class="section-toggle">Show</button>
+    <h2 id="needsVerificationCount" class="section-heading">Needs Verification</h2>
+    <p class="hint">Listings where one or more hard requirements couldn't be confirmed from the source. Never treated as a match — check the original listing before acting on any of these.</p>
+    <section id="needsVerificationResults" class="results" hidden></section>
+  </section>
+
+  <section id="nearMatchesSection" class="section-block" hidden>
+    <h2 class="section-heading">Near Matches</h2>
+    <p class="hint">Real listings that fail at least one hard requirement — shown so you know what's out there and exactly why each one doesn't qualify.</p>
+    <section id="nearMatchResults" class="results near-matches"></section>
+  </section>
 </main>
 
 <dialog id="addListingDialog">
   <form id="addListingForm" method="dialog">
-    <h2>Add a listing</h2>
-    <p class="hint">Paste in details from a group post or listing site as soon as you see them — this saves it to your browser so it shows up in your search from now on.</p>
+    <h2>Add a listing you found</h2>
+    <p class="hint">For posts you see yourself in a Facebook group, WhatsApp, or anywhere the automated pipeline can't reach — paste the raw text below and the fields auto-fill. This listing gets geocoded, routed, and hard-filtered the same as anything the pipeline discovers; it will only show as a Confirmed Match if it genuinely qualifies.</p>
 
-    <label>Paste a group post / listing text here to auto-fill the fields below
+    <label>Paste the raw post text here to auto-fill the fields below
       <textarea id="pasteBox" rows="4" placeholder="Paste the raw WhatsApp/Facebook/Telegram post text here…"></textarea>
     </label>
 
     <label>Title
-      <input type="text" name="title" required placeholder="e.g. 1BHK furnished, Hebbal">
+      <input type="text" name="title" placeholder="e.g. 1BHK semi-furnished, Vasanth Nagar">
     </label>
-    <label>Locality
-      <input type="text" name="locality" required placeholder="e.g. Hebbal">
-    </label>
-    <label>Approx. distance from Manyata (km)
-      <input type="number" name="distanceKm" step="0.1" min="0">
+    <label>Location / address
+      <input type="text" name="location" required placeholder="e.g. RT Nagar, Bangalore">
     </label>
     <label>BHK
-      <select name="bhk">
-        <option value="1">1</option>
-        <option value="2">2</option>
-        <option value="3">3+</option>
-      </select>
+      <input type="number" name="bhk" step="0.5" min="0.5" value="1">
     </label>
     <label>Furnishing
       <select name="furnishing">
+        <option value="">Unknown</option>
         <option value="full">Fully furnished</option>
-        <option value="semi">Semi furnished</option>
+        <option value="semi" selected>Semi-furnished</option>
         <option value="none">Unfurnished</option>
+      </select>
+    </label>
+    <label>Lift
+      <select name="lift">
+        <option value="">Unknown</option>
+        <option value="true">Yes</option>
+        <option value="false">No</option>
       </select>
     </label>
     <label>Rent (₹/month)
@@ -116,32 +91,45 @@
     <label>Deposit (₹)
       <input type="number" name="deposit" min="0" step="1000">
     </label>
-    <label class="checkbox-field">
-      <input type="checkbox" name="brokerage">
-      Brokerage involved
+    <label>Brokerage
+      <select name="brokerageStatus">
+        <option value="">Unknown</option>
+        <option value="zero">₹0 / owner-direct</option>
+        <option value="broker">Broker involved</option>
+      </select>
+    </label>
+    <label>Owner / broker status
+      <select name="ownerStatus">
+        <option value="">Unknown</option>
+        <option value="owner">Owner-direct</option>
+        <option value="broker">Broker</option>
+      </select>
+    </label>
+    <label>Available from
+      <input type="text" name="availableFrom" placeholder="e.g. Immediately, 1st Nov">
     </label>
     <label>Contact
       <input type="text" name="contact" placeholder="Name / phone / who posted it">
     </label>
     <label>Source
-      <input type="text" name="source" placeholder="e.g. WhatsApp group, NoBroker, 99acres">
+      <input type="text" name="source" placeholder="e.g. Facebook group name, WhatsApp">
     </label>
     <label>Link (optional)
       <input type="url" name="link" placeholder="https://...">
-    </label>
-    <label>Notes
-      <textarea name="notes" rows="2" placeholder="Anything else worth remembering"></textarea>
     </label>
 
     <div class="dialog-actions">
       <button type="button" id="cancelAdd">Cancel</button>
       <button type="submit" id="saveAdd">Save listing</button>
     </div>
+    <div id="parseStatus" class="parse-status"></div>
   </form>
 </dialog>
 
 <script src="config.js"></script>
 <script src="parser.js"></script>
+<script src="geo-client.js"></script>
+<script src="filter-client.js"></script>
 <script src="app.js"></script>
 <script>
   if ("serviceWorker" in navigator) {
