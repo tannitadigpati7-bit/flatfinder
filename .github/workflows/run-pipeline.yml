@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Dry run (discover + process, don't write to Firebase)"
+        description: "Dry run (discover + process, don't write to Supabase)"
         type: boolean
         default: false
 
@@ -32,7 +32,8 @@ jobs:
 
       - name: Run pipeline
         env:
-          FIREBASE_DB_URL: ${{ secrets.FIREBASE_DB_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           APIFY_SITES: ${{ vars.APIFY_SITES }}

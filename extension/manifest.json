@@ -6,7 +6,8 @@
   "permissions": ["contextMenus", "storage", "notifications"],
   "host_permissions": [
     "https://nominatim.openstreetmap.org/*",
-    "https://router.project-osrm.org/*"
+    "https://router.project-osrm.org/*",
+    "https://*.supabase.co/*"
   ],
   "background": {
     "service_worker": "background.js"

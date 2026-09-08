@@ -1,17 +1,21 @@
 """
-RAW DATA STORAGE + freshness tracking, backed by the same Firebase Realtime
-Database the site already uses (see README > "Setting up the shared
-backend"). Nothing here is a new backend — it's the persistence layer the
-rest of the pipeline reads/writes through, keyed by a stable id derived
-from (source, source_listing_id) so re-discovering the same listing
-updates it in place instead of duplicating it.
+RAW DATA STORAGE + freshness tracking, backed by Supabase (Postgres via
+PostgREST — see supabase/schema.sql for the table this reads/writes).
+Uses the service_role key so the scheduled pipeline can write regardless of
+the row-level-security policies that gate the public anon key used by the
+browser (site, extension, mobile share target) — see schema.sql's comments
+for exactly what each key is and isn't allowed to do.
+
+Listings are upserted per-row on the (source, source_listing_id) unique
+constraint rather than the old Firebase approach of overwriting the entire
+collection on every save — a run that discovers 40 listings no longer risks
+clobbering rows a concurrent manual capture just added.
 
 Freshness model (see FRESHNESS in the project spec):
   first_seen       - set once, on first write, never overwritten.
   last_seen        - updated every time this run's discovery re-found it.
   last_verified    - updated only when a source connector actually
-                      confirms the listing still exists (e.g. re-fetched
-                      its detail page and it still resolves), not merely
+                      confirms the listing still exists, not merely
                       because a pipeline run happened.
   source_status    - derived from how long it's been since last_seen /
                       last_verified (see _derive_status below); a listing
@@ -29,16 +33,26 @@ from typing import Dict, List
 import config
 from listing_schema import Listing, make_listing_id
 
+LISTINGS_ENDPOINT = "/rest/v1/listings"
 
-def _http_json(url: str, data=None, method: str = "GET"):
-    if data is not None:
-        body = json.dumps(data).encode("utf-8")
-        req = urllib.request.Request(url, data=body, method=method)
-        req.add_header("Content-Type", "application/json")
-    else:
-        req = urllib.request.Request(url, method=method)
+
+def _supabase_request(path: str, method: str = "GET", data=None, extra_headers=None):
+    if not config.SUPABASE_URL or not config.SUPABASE_SERVICE_ROLE_KEY:
+        raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not configured.")
+    url = f"{config.SUPABASE_URL.rstrip('/')}{path}"
+    headers = {
+        "apikey": config.SUPABASE_SERVICE_ROLE_KEY,
+        "Authorization": f"Bearer {config.SUPABASE_SERVICE_ROLE_KEY}",
+        "Content-Type": "application/json",
+    }
+    if extra_headers:
+        headers.update(extra_headers)
+
+    body = json.dumps(data).encode("utf-8") if data is not None else None
+    req = urllib.request.Request(url, data=body, method=method, headers=headers)
     with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+        raw = resp.read().decode("utf-8")
+        return json.loads(raw) if raw else None
 
 
 def now_iso() -> str:
@@ -68,22 +82,27 @@ def _derive_status(last_seen_iso: str, last_verified_iso: str) -> str:
 
 
 def fetch_all() -> Dict[str, Listing]:
-    """Loads every stored listing keyed by its stable id."""
-    if not config.FIREBASE_DB_URL:
+    """Loads every stored listing, keyed by an in-memory
+    (source, source_listing_id) id — this key never touches the database,
+    it's just how this module tracks "have we seen this before" across a
+    run. Returns {} rather than raising if Supabase isn't configured or
+    unreachable, so a first-ever run with an empty table behaves the same
+    as a network hiccup: nothing to merge against, not a fatal error."""
+    if not config.SUPABASE_URL or not config.SUPABASE_SERVICE_ROLE_KEY:
         return {}
     try:
-        raw = _http_json(f"{config.FIREBASE_DB_URL}/pipeline_listings.json") or {}
-    except (urllib.error.URLError, TimeoutError):
+        rows = _supabase_request(f"{LISTINGS_ENDPOINT}?select=*") or []
+    except (urllib.error.URLError, TimeoutError, RuntimeError):
         return {}
 
     out: Dict[str, Listing] = {}
-    for key, fields in raw.items():
+    known_fields = {f for f in Listing.__dataclass_fields__}
+    for row in rows:
+        fields = {k: v for k, v in row.items() if k in known_fields}
         try:
-            out[key] = Listing(**fields)
+            out[make_listing_id(fields.get("source", ""), fields.get("source_listing_id", ""))] = Listing(**fields)
         except TypeError:
-            # A stored record with a shape from an older schema version —
-            # skip rather than crash the whole run on one bad record.
-            continue
+            continue  # a row shaped by an older schema version — skip, don't crash the run
     return out
 
 
@@ -127,10 +146,20 @@ def carry_forward_missing(fresh: List[Listing], existing: Dict[str, Listing]) ->
 
 
 def save_all(listings: List[Listing]) -> None:
-    if not config.FIREBASE_DB_URL:
-        raise RuntimeError("FIREBASE_DB_URL is not configured — nothing to save to.")
-    payload = {}
-    for listing in listings:
-        key = make_listing_id(listing.source, listing.source_listing_id)
-        payload[key] = listing.to_dict()
-    _http_json(f"{config.FIREBASE_DB_URL}/pipeline_listings.json", data=payload, method="PUT")
+    """Upserts every listing in one batched request, keyed on the
+    (source, source_listing_id) unique constraint — see schema.sql. Rows
+    for other listings already in the table (including ones the browser
+    added via manual capture) are left untouched; this never wipes the
+    table the way the old Firebase full-collection PUT did."""
+    if not config.SUPABASE_URL or not config.SUPABASE_SERVICE_ROLE_KEY:
+        raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not configured — nothing to save to.")
+    if not listings:
+        return
+
+    payload = [listing.to_dict() for listing in listings]
+    _supabase_request(
+        f"{LISTINGS_ENDPOINT}?on_conflict=source,source_listing_id",
+        method="POST",
+        data=payload,
+        extra_headers={"Prefer": "resolution=merge-duplicates,return=minimal"},
+    )

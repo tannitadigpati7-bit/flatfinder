@@ -8,8 +8,6 @@
 const REQ = (typeof CONFIG !== "undefined" && CONFIG.REQUIREMENTS) || {};
 const OFFICE_ADDRESS = (typeof CONFIG !== "undefined" && CONFIG.OFFICE_ADDRESS) || "";
 const OFFICE_NAME = (typeof CONFIG !== "undefined" && CONFIG.OFFICE_NAME) || "the office";
-const FIREBASE_DB_URL = (typeof CONFIG !== "undefined" && CONFIG.FIREBASE_DB_URL) || "";
-const LISTINGS_PATH = "pipeline_listings";
 
 const state = { listings: [] };
 
@@ -32,23 +30,8 @@ const els = {
 
 // ---------------------------------------------------------------- loading
 
-function normalizeListing(id, listing) {
-  return { ...listing, id };
-}
-
 async function loadListings() {
-  if (!FIREBASE_DB_URL) {
-    state.listings = [];
-    render();
-    return;
-  }
-  try {
-    const res = await fetch(`${FIREBASE_DB_URL}/${LISTINGS_PATH}.json`);
-    const shared = await res.json(); // {pushId: {...}, ...} or null if empty
-    state.listings = Object.entries(shared || {}).map(([id, listing]) => normalizeListing(id, listing));
-  } catch {
-    state.listings = [];
-  }
+  state.listings = await window.FlatFinderSupabase.fetchListings();
   render();
 }
 
@@ -146,7 +129,7 @@ function renderNearMatchCard(listing) {
     <div class="fails">Fails: ${listing.fail_reasons.map(escapeHtml).join("; ")}</div>
     <div class="location">📍 ${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</div>
     <div class="meta">via ${escapeHtml(listing.source || "unknown source")}</div>
-    ${listing.url ? `<a class="view-link" href="${escapeAttr(listing.url)}" target="_blank" rel="noopener">View Original Listing</a>` : ""}
+    ${listing.url ? `<a class="view-link" href="${escapeAttr(listing.url)}" target="_blank" rel="noopener">View Original Listing</a>` : '<div class="view-link disabled">No source link available</div>'}
   `;
   return card;
 }
@@ -186,7 +169,7 @@ function render() {
 
   els.emptyState.hidden = confirmed.length !== 0;
   if (confirmed.length === 0) {
-    els.emptyState.textContent = FIREBASE_DB_URL
+    els.emptyState.textContent = window.FlatFinderSupabase.isConfigured()
       ? "No verified matches found right now."
       : "No shared backend configured (see README) — nothing has been discovered yet.";
   }
@@ -263,22 +246,17 @@ async function addListingFromForm(formData, form) {
   });
   window.FlatFinderFilter.applyHardFilter(stored, REQ);
 
-  if (FIREBASE_DB_URL) {
+  if (window.FlatFinderSupabase.isConfigured()) {
     try {
-      const res = await fetch(`${FIREBASE_DB_URL}/${LISTINGS_PATH}.json`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(stored),
-      });
-      const { name } = await res.json();
-      state.listings.push({ ...stored, id: name });
+      const saved = await window.FlatFinderSupabase.insertListing(stored);
+      state.listings.push(saved);
       els.parseStatus.textContent = `Saved — ${stored.match_status.replace("_", " ")}.`;
     } catch {
       els.parseStatus.textContent = "Couldn't reach the shared database — not saved.";
       return;
     }
   } else {
-    els.parseStatus.textContent = "No shared backend configured — set FIREBASE_DB_URL in config.js first.";
+    els.parseStatus.textContent = "No shared backend configured — set SUPABASE_URL/SUPABASE_ANON_KEY in config.js first.";
     return;
   }
   render();
