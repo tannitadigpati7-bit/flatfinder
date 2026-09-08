@@ -104,7 +104,7 @@ def run(dry_run: bool = False) -> int:
     print(f"[run] confirmed={confirmed} needs_verification={needs_verification} rejected={rejected}")
 
     if dry_run:
-        print("[run] --dry-run set, not writing to Firebase. Sample confirmed listing:")
+        print("[run] --dry-run set, not writing to Supabase. Sample confirmed listing:")
         for l in deduped:
             if l.match_status == "confirmed":
                 import json
@@ -129,7 +129,7 @@ def run(dry_run: bool = False) -> int:
 
     final = merged + carried_forward
     store.save_all(final)
-    print(f"[run] saved {len(final)} listings to Firebase ({len(carried_forward)} carried forward unchanged)")
+    print(f"[run] saved {len(final)} listings to Supabase ({len(carried_forward)} carried forward unchanged)")
     return 0
 
 
