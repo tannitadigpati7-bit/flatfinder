@@ -107,8 +107,25 @@ def geocode(query_text: str, cache: Optional[dict] = None) -> Optional[Tuple[flo
 def geocode_office(cache: Optional[dict] = None) -> Optional[Tuple[float, float]]:
     """Geocodes the fixed office destination — computed the same way as any
     listing's location, never hardcoded, so it's auditable against the same
-    cache file."""
-    return geocode(config.OFFICE_ADDRESS, cache=cache)
+    cache file.
+
+    A small company's office name is often not a named point of interest in
+    OpenStreetMap's database, so the full address can legitimately return no
+    match even though the street/neighbourhood does. Falls back through
+    progressively broader *real* substrings of the same configured address
+    (never a different, invented address) until one resolves — the office
+    still ends up wherever Vasanth Nagar/Bangalore actually is, just without
+    a hit on the specific building name."""
+    candidates = [config.OFFICE_ADDRESS]
+    parts = [p.strip() for p in config.OFFICE_ADDRESS.split(",") if p.strip()]
+    for i in range(1, len(parts)):
+        candidates.append(", ".join(parts[i:]))
+
+    for query in candidates:
+        result = geocode(query, cache=cache)
+        if result is not None:
+            return result
+    return None
 
 
 class GeocodeSession:

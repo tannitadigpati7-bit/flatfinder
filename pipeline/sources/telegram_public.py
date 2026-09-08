@@ -48,9 +48,12 @@ class TelegramPublicSource(Source):
     name = "telegram_public"
 
     def __init__(self, channels=None):
-        self.channels = channels or [
-            c.strip() for c in os.environ.get("TG_CHANNELS", DEFAULT_CHANNELS).split(",") if c.strip()
-        ]
+        # GitHub Actions injects TG_CHANNELS as an empty string (not an
+        # absent var) when the repo variable isn't set, so os.environ.get's
+        # default never kicks in there — fall back to DEFAULT_CHANNELS
+        # explicitly for both "unset" and "set but blank".
+        raw = os.environ.get("TG_CHANNELS", "").strip() or DEFAULT_CHANNELS
+        self.channels = channels or [c.strip() for c in raw.split(",") if c.strip()]
 
     def _fetch_channel_html(self, channel: str) -> str:
         url = f"https://t.me/s/{urllib.parse.quote(channel)}"
