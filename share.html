@@ -11,30 +11,26 @@
   #shareForm { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
   #shareForm label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--muted); }
   #shareForm input, #shareForm select, #shareForm textarea { padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.95rem; font-family: inherit; color: var(--text); }
-  #shareForm label.checkbox-field { flex-direction: row; align-items: center; gap: 8px; }
   #shareStatus { font-size: 0.85rem; }
   #shareStatus.ok { color: var(--accent); }
   #shareStatus.err { color: var(--danger); }
+  #matchStatus { font-size: 0.9rem; font-weight: 600; }
+  #matchStatus.confirmed { color: var(--accent); }
+  #matchStatus.needs_verification { color: var(--warn); }
+  #matchStatus.rejected { color: var(--danger); }
   .needs-review { border-color: #d99a1c !important; }
 </style>
 </head>
 <body>
 <header>
   <h1>Save to FlatFinder</h1>
-  <p class="subtitle">Shared from another app — review before saving</p>
+  <p class="subtitle">Shared from another app — review before saving. Same hard filter as the automated pipeline applies here.</p>
 </header>
 <main class="share">
   <form id="shareForm">
-    <label>Title <input type="text" id="title" required></label>
-    <label>Locality <input type="text" id="locality"></label>
-    <label>BHK
-      <select id="bhk">
-        <option value="">Unknown</option>
-        <option value="1">1</option>
-        <option value="2">2</option>
-        <option value="3">3+</option>
-      </select>
-    </label>
+    <label>Title <input type="text" id="title"></label>
+    <label>Location / address <input type="text" id="location" required></label>
+    <label>BHK <input type="number" id="bhk" step="0.5" min="0" value="1"></label>
     <label>Furnishing
       <select id="furnishing">
         <option value="">Unknown</option>
@@ -43,41 +39,64 @@
         <option value="none">Unfurnished</option>
       </select>
     </label>
+    <label>Lift
+      <select id="lift">
+        <option value="">Unknown</option>
+        <option value="true">Yes</option>
+        <option value="false">No</option>
+      </select>
+    </label>
     <label>Rent (₹/month) <input type="number" id="rent" min="0"></label>
     <label>Deposit (₹) <input type="number" id="deposit" min="0"></label>
-    <label class="checkbox-field"><input type="checkbox" id="brokerage"> Brokerage involved</label>
+    <label>Brokerage
+      <select id="brokerageStatus">
+        <option value="">Unknown</option>
+        <option value="zero">₹0 / owner-direct</option>
+        <option value="broker">Broker involved</option>
+      </select>
+    </label>
+    <label>Owner/broker
+      <select id="ownerStatus">
+        <option value="">Unknown</option>
+        <option value="owner">Owner-direct</option>
+        <option value="broker">Broker</option>
+      </select>
+    </label>
     <label>Contact <input type="text" id="contact"></label>
     <label>Source <input type="text" id="source"></label>
     <label>Link <input type="url" id="link"></label>
-    <label>Notes <textarea id="notes" rows="4"></textarea></label>
+    <label>Raw text (kept for audit) <textarea id="notes" rows="4"></textarea></label>
     <button type="submit" id="saveShare" style="padding:10px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-contrast);cursor:pointer;">Save listing</button>
+    <div id="matchStatus"></div>
     <div id="shareStatus"></div>
   </form>
 </main>
 
 <script src="config.js"></script>
 <script src="parser.js"></script>
+<script src="geo-client.js"></script>
+<script src="filter-client.js"></script>
 <script>
   const params = new URLSearchParams(location.search);
-  const sharedText = [params.get("title"), params.get("text"), params.get("url")]
-    .filter(Boolean)
-    .join("\n");
+  const sharedText = [params.get("title"), params.get("text"), params.get("url")].filter(Boolean).join("\n");
   const parsed = FlatFinderParser.parse(sharedText, { sourceUrl: params.get("url") || "" });
 
-  const fieldIds = ["title", "locality", "bhk", "furnishing", "rent", "deposit", "contact", "source", "link", "notes"];
+  const fieldIds = ["title", "location", "bhk", "furnishing", "lift", "rent", "deposit", "brokerageStatus", "ownerStatus", "contact", "source", "link"];
   fieldIds.forEach((id) => {
     const el = document.getElementById(id);
-    if (el) el.value = parsed[id] ?? "";
+    if (!el) return;
+    const value = parsed[id];
+    if (value !== null && value !== undefined) el.value = value;
   });
-  document.getElementById("brokerage").checked = !!parsed.brokerage;
+  document.getElementById("notes").value = parsed.rawText || "";
 
-  ["locality", "bhk", "furnishing", "rent", "contact"].forEach((id) => {
-    if (parsed.confidence && parsed.confidence[id] === false) {
-      document.getElementById(id).classList.add("needs-review");
-    }
+  Object.entries(parsed.confidence || {}).forEach(([id, confident]) => {
+    const el = document.getElementById(id);
+    if (el && !confident) el.classList.add("needs-review");
   });
 
   const statusEl = document.getElementById("shareStatus");
+  const matchEl = document.getElementById("matchStatus");
 
   document.getElementById("shareForm").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -87,27 +106,59 @@
       statusEl.className = "err";
       return;
     }
-    const body = JSON.stringify({
-      title: document.getElementById("title").value.trim(),
-      locality: document.getElementById("locality").value.trim(),
-      distanceKm: "",
-      bhk: parseFloat(document.getElementById("bhk").value) || 1,
-      furnishing: document.getElementById("furnishing").value,
-      rent: parseFloat(document.getElementById("rent").value) || "",
-      deposit: parseFloat(document.getElementById("deposit").value) || "",
-      brokerage: document.getElementById("brokerage").checked,
-      contact: document.getElementById("contact").value.trim(),
-      source: document.getElementById("source").value.trim() || "Mobile share",
-      link: document.getElementById("link").value.trim(),
-      notes: document.getElementById("notes").value.trim(),
-    });
-    statusEl.textContent = "Saving…";
+
+    statusEl.textContent = "Geocoding and computing commute…";
     statusEl.className = "";
+
+    const formParsed = {
+      title: document.getElementById("title").value.trim() || null,
+      location: document.getElementById("location").value.trim() || null,
+      address: document.getElementById("location").value.trim() || null,
+      bhk: parseFloat(document.getElementById("bhk").value) || null,
+      furnishing: document.getElementById("furnishing").value || null,
+      lift: document.getElementById("lift").value === "true" ? true : document.getElementById("lift").value === "false" ? false : null,
+      rent: parseFloat(document.getElementById("rent").value) || null,
+      deposit: parseFloat(document.getElementById("deposit").value) || null,
+      brokerageStatus: document.getElementById("brokerageStatus").value || null,
+      brokerageAmount: document.getElementById("brokerageStatus").value === "zero" ? 0 : null,
+      ownerStatus: document.getElementById("ownerStatus").value || null,
+      source: document.getElementById("source").value.trim() || "Mobile share",
+      url: document.getElementById("link").value.trim() || null,
+      rawText: document.getElementById("notes").value.trim() || null,
+    };
+
+    let lat = null, lng = null, commuteMinutes = null, commuteSource = null;
+    const officeAddress = (typeof CONFIG !== "undefined" && CONFIG.OFFICE_ADDRESS) || "";
+    if (formParsed.location && officeAddress) {
+      const officeCoords = await window.FlatFinderGeo.geocodeOffice(officeAddress);
+      const originCoords = await window.FlatFinderGeo.geocode(formParsed.location);
+      if (originCoords) {
+        lat = originCoords.lat;
+        lng = originCoords.lng;
+        if (officeCoords) {
+          const result = await window.FlatFinderGeo.commuteMinutes(originCoords, officeCoords);
+          commuteMinutes = result.minutes;
+          commuteSource = result.source;
+        }
+      }
+    }
+
+    const stored = window.FlatFinderFilter.buildStoredListing(formParsed, {
+      sourceListingId: `manual-${Date.now()}`,
+      lat, lng, commuteMinutes, commuteSource,
+    });
+    const requirements = (typeof CONFIG !== "undefined" && CONFIG.REQUIREMENTS) || {
+      bhk: 1, furnishing: "semi", maxRent: 15000, maxDeposit: 50000, lift: true, brokerageZero: true, maxCommuteMinutes: 30,
+    };
+    window.FlatFinderFilter.applyHardFilter(stored, requirements);
+    matchEl.textContent = `Match status: ${stored.match_status.replace("_", " ")}`;
+    matchEl.className = stored.match_status;
+
     try {
-      const res = await fetch(`${dbUrl}/listings.json`, {
+      const res = await fetch(`${dbUrl}/pipeline_listings.json`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body,
+        body: JSON.stringify(stored),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       statusEl.textContent = "Saved. You can close this tab.";

@@ -1,33 +1,30 @@
-// Shared free-text -> listing-fields parser.
+// Shared free-text -> listing-fields parser. Mirrors pipeline/extraction.py
+// field-for-field so a listing captured by hand (extension, mobile share,
+// paste box) is extracted the same way a scraped one is.
+//
 // Used by: the Chrome extension popup, the mobile share-target page
 // (share.html), and the "paste from a group post" box in the main site's
-// Add a listing form. One parsing implementation, three capture surfaces.
-//
-// This does NOT fetch or read anything on its own — it only turns text the
-// user already has in front of them (pasted, selected, or shared) into
-// structured fields for review before saving.
+// Add a listing form. This does NOT fetch or read anything on its own — it
+// only turns text the user already has in front of them into structured
+// fields for review before saving. Every field defaults to null
+// ("UNKNOWN") rather than guessing.
 
 (function (root) {
-  const TARGET_LOCALITIES = [
-    // Manyata Tech Park / North Bangalore
-    "manyata", "hebbal", "nagawara", "thanisandra", "hbr layout", "hrbr",
-    "jakkur", "yelahanka", "rt nagar", "hennur", "kalyan nagar",
-    "banaswadi", "kammanahalli", "horamavu",
-    // Indiranagar
-    "indiranagar", "indira nagar", "indranagar", "domlur",
-    // HSR Layout
-    "hsr layout", "hsr", "agara", "sector 1", "sector 2", "sector 3",
-    "sector 4", "sector 5", "sector 6", "sector 7",
-  ];
-
   const FURNISHING_PATTERNS = [
-    [/\bfully[\s-]?furnished\b|\bfull furnish/i, "full"],
     [/\bsemi[\s-]?furnished\b/i, "semi"],
+    [/\bfully[\s-]?furnished\b|\bfull(?:y)?\s*furnish/i, "full"],
     [/\bun[\s-]?furnished\b|\bbare\s?shell\b|\bno furnishing\b/i, "none"],
   ];
 
-  const NO_BROKERAGE_RE = /\bno\s*[- ]?brokerage\b|\bzero\s*brokerage\b|\bbrokerage\s*free\b|\bno\s*broker\b|\bwithout\s*brokerage\b/i;
-  const HAS_BROKERAGE_RE = /\bbrokerage\s*(applicable|involved|:?\s*yes)\b|\bbroker\s*contact\b|\b1\s*month\s*brokerage\b|\bbrokerage\s*charges?\b/i;
+  const LIFT_YES_RE = /\blift\s*(available|present|:?\s*yes)\b|\bwith\s+lift\b|\belevator\s*(available|present)\b/i;
+  const LIFT_NO_RE = /\bno\s+lift\b|\blift\s*:?\s*no\b|\bwithout\s+lift\b|\bno\s+elevator\b/i;
+  const LIFT_BARE_RE = /\blift\b|\belevator\b/i;
+
+  const NO_BROKERAGE_RE = /\bno\s*[- ]?brokerage\b|\bzero\s*brokerage\b|\bbrokerage\s*free\b|\bno\s*broker\b|\bwithout\s*brokerage\b|\bbrokerage\s*:?\s*(?:nil|0|zero)\b/i;
+  const HAS_BROKERAGE_RE = /\bbrokerage\s*(applicable|involved|:?\s*yes)\b|\bbroker\s*contact\b|\b\d+\s*month'?s?\s*brokerage\b/i;
+
+  const OWNER_RE = /\bowner\s*direct\b|\bdirect\s*from\s*owner\b|\bposted\s*by\s*owner\b|\bno\s*brokers?\s*please\b|\(owner\)/i;
+  const BROKER_RE = /\bbroker\b(?!s?\s*please)|\bagent\b|\bproperty\s*consultant\b|\breal\s*estate\s*agent\b/i;
 
   // Indian mobile numbers: optional +91/91 prefix, then a 10-digit number
   // starting 6-9. Also catches wa.me/+91XXXXXXXXXX links.
@@ -51,17 +48,6 @@
       .trim();
   }
 
-  function findLocality(text) {
-    const lower = text.toLowerCase();
-    for (const key of TARGET_LOCALITIES) {
-      if (lower.includes(key)) {
-        // Title-case the matched keyword for display.
-        return key.replace(/\b\w/g, (c) => c.toUpperCase());
-      }
-    }
-    return "";
-  }
-
   function findBhk(text) {
     const m = text.match(/(\d(?:\.\d)?)\s*[- ]?\s*bhk/i);
     if (m) return parseFloat(m[1]);
@@ -73,7 +59,27 @@
     for (const [re, value] of FURNISHING_PATTERNS) {
       if (re.test(text)) return value;
     }
-    return "";
+    return null;
+  }
+
+  function findLift(text) {
+    if (LIFT_NO_RE.test(text)) return false;
+    if (LIFT_YES_RE.test(text)) return true;
+    if (LIFT_BARE_RE.test(text)) return true;
+    return null;
+  }
+
+  function findBrokerage(text) {
+    // Returns { status: "zero"|"broker"|null, amount: 0|null }
+    if (NO_BROKERAGE_RE.test(text)) return { status: "zero", amount: 0 };
+    if (HAS_BROKERAGE_RE.test(text)) return { status: "broker", amount: null };
+    return { status: null, amount: null };
+  }
+
+  function findOwnerStatus(text) {
+    if (OWNER_RE.test(text)) return "owner";
+    if (BROKER_RE.test(text)) return "broker";
+    return null;
   }
 
   function parseMoneyValue(raw) {
@@ -86,23 +92,13 @@
     const num = parseFloat(raw.replace(/,/g, ""));
     if (Number.isNaN(num)) return null;
     const amount = num * multiplier;
-    // Guards against false positives like "for Rent in ... Sector 7" (bare
-    // "7") — real rent/deposit figures in Bangalore are never under four
-    // digits, so treat anything smaller as a non-match rather than trust it.
+    // Real rent/deposit figures in Bangalore are never under four digits.
     return amount >= 1000 ? amount : null;
   }
 
   function findMoney(text, keywords) {
-    // Looks for a keyword (e.g. "rent", "deposit") near a number, or a bare
-    // ₹ amount. Handles "20k", "20,000", "Rs 20000", "₹20,000". A keyword can
-    // appear more than once (e.g. "Apartment for Rent in HSR, Sector 7"
-    // before the real "Rent: 33k") — check every occurrence in order and
-    // keep the first one that parses to a plausible amount.
     const kwPattern = keywords.join("|");
-    const nearKeyword = new RegExp(
-      `(?:${kwPattern})[^\\d₹]{0,15}(₹?\\s?[\\d,]+\\s?k?)`,
-      "gi"
-    );
+    const nearKeyword = new RegExp(`(?:${kwPattern})[^\\d₹]{0,15}(₹?\\s?[\\d,]+\\s?k?)`, "gi");
     let m;
     while ((m = nearKeyword.exec(text))) {
       const amount = parseMoneyValue(m[1]);
@@ -117,68 +113,75 @@
     return null;
   }
 
-  function findBrokerage(text) {
-    if (NO_BROKERAGE_RE.test(text)) return false;
-    if (HAS_BROKERAGE_RE.test(text)) return true;
-    return null; // unknown — leave for the human to confirm
-  }
-
   function findContact(text) {
     const wa = text.match(WA_LINK_RE);
     if (wa) return `WhatsApp: +${wa[1]}`;
     const phone = text.match(PHONE_RE);
     if (phone) return phone[0].replace(/[\s-]/g, "");
-    return "";
+    return null;
   }
 
   function findTitle(text) {
     const firstLine = text.split("\n").map((l) => l.trim()).find(Boolean);
-    return firstLine ? firstLine.slice(0, 120) : "";
+    return firstLine ? firstLine.slice(0, 120) : null;
+  }
+
+  function findLocation(text) {
+    const m = text.match(/\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2}\s*(?:Nagar|Layout|Colony|Extension|Cross|Block|Road|Town|Halli|Palya))\b/);
+    return m ? m[1].trim() : null;
   }
 
   /**
    * @param {string} rawText - pasted/selected/shared text, may contain HTML.
    * @param {object} [context] - { sourceUrl }
-   * @returns {object} listing fields, plus `confidence` flags for fields
-   *   that were not found and need the user to fill in by hand.
+   * @returns {object} listing fields (pipeline Listing shape, camelCase),
+   *   plus `confidence` flags for fields the parser wasn't sure about.
    */
   function parse(rawText, context) {
     context = context || {};
     const isHtml = /<[a-z][\s\S]*>/i.test(rawText);
     const text = isHtml ? stripHtml(rawText) : rawText.trim();
 
-    const locality = findLocality(text);
     const bhk = findBhk(text);
     const furnishing = findFurnishing(text);
+    const lift = findLift(text);
     const rent = findMoney(text, ["rent", "monthly rent", "per month", "/mo"]);
     const deposit = findMoney(text, ["deposit", "advance"]);
     const brokerage = findBrokerage(text);
+    const ownerStatus = findOwnerStatus(text);
     const contact = findContact(text);
     const title = findTitle(text);
+    const location = findLocation(text);
 
     return {
       title,
-      locality,
-      distanceKm: "",
-      bhk: bhk || "",
-      furnishing: furnishing || "",
-      rent: rent || "",
-      deposit: deposit || "",
-      brokerage: brokerage === true,
+      location,
+      address: location,
+      bhk,
+      furnishing,
+      lift,
+      rent,
+      deposit,
+      brokerageStatus: brokerage.status,
+      brokerageAmount: brokerage.amount,
+      ownerStatus,
       contact,
-      source: context.sourceUrl ? new URL(context.sourceUrl).hostname : "Pasted",
-      link: context.sourceUrl || "",
-      notes: text,
+      source: context.sourceUrl ? new URL(context.sourceUrl).hostname : "Manual capture",
+      url: context.sourceUrl || null,
+      rawText: text,
       confidence: {
-        locality: !!locality,
+        location: !!location,
         bhk: bhk !== null,
         furnishing: !!furnishing,
+        lift: lift !== null,
         rent: rent !== null,
-        brokerage: brokerage !== null,
+        deposit: deposit !== null,
+        brokerageStatus: brokerage.status !== null,
+        ownerStatus: ownerStatus !== null,
         contact: !!contact,
       },
     };
   }
 
-  root.FlatFinderParser = { parse, TARGET_LOCALITIES };
+  root.FlatFinderParser = { parse };
 })(typeof self !== "undefined" ? self : this);

@@ -1,269 +1,221 @@
 # FlatFinder
 
-A search tool + capture toolkit for finding 1BHK fully-furnished,
-no-brokerage flats around Manyata Tech Park, Hebbal/North Bangalore,
-Indiranagar, and HSR Layout — built so you don't have to manually scroll
-through dozens of Telegram/Facebook/WhatsApp flat groups and listing sites
-every time.
+A personal rental search engine, not a listing site. It exists to answer one
+question: **find a real 1BHK I can actually rent, within 30 minutes of
+Bathla Aluminium Corporate Office, Vasanth Nagar, Bangalore.**
 
-**Where real data comes from, honestly:**
+Fixed requirements (not adjustable filters — the whole pipeline is built
+around these; see [`pipeline/config.py`](pipeline/config.py) and
+[`config.js`](config.js)):
 
-- **Automated, no login required:** a scheduled scraper reads Telegram's own
-  *public* channel previews (`t.me/s/<channel>`) — plain public web pages,
-  same as any browser gets with no account — and pulls out matching
-  no-brokerage posts automatically. See
-  [Auto-importing from Telegram](#auto-importing-from-telegram-public-channels-verified-working)
-  below. This is the main source of real, current listings.
-- **Manual capture, made fast:** Facebook groups and WhatsApp don't expose
-  anything like Telegram's public preview — reading them any other way means
-  either an authenticated account automating against the platform's own
-  Terms of Service (real ban risk to your real number/account) or a
-  maintained third party. Neither is worth the risk here, so instead this
-  repo ships a [Chrome extension](#chrome-extension-facebook--whatsapp-web--anywhere)
-  and a [mobile share target](#mobile-android-share-sheet) that turn "I just
-  saw a post" into a saved, structured listing in one action — you're still
-  the one reading the group, same as always, this just removes the retyping.
-- **NoBroker (optional, unverified):** see
-  [Auto-importing NoBroker listings](#auto-importing-nobroker-listings-via-apify-optional--needs-verification)
-  — this one still needs you to verify it against a real Apify account before
-  trusting it.
+- 1 BHK, semi-furnished
+- Rent ≤ ₹15,000/month, deposit ≤ ₹50,000
+- Lift mandatory
+- Brokerage ₹0 / owner-direct preferred
+- ≤ 30 minutes' commute to Bathla Aluminium Corporate Office, Vasanth Nagar
+  — computed as actual driving time, not straight-line distance
+- Anywhere in Bangalore — there is no predefined neighbourhood allowlist;
+  commute time is the only geographic filter
 
-## How it works
+**Data discipline:** nothing here is fabricated. Every field a listing
+doesn't clearly support stays `null` ("UNKNOWN" in the UI) — it is never
+assumed to satisfy a hard requirement. A listing only appears under
+**Confirmed Matches** when every hard requirement is both known and met.
+Zero confirmed matches is a valid, expected result, and the UI says exactly
+that rather than padding the page with near-misses.
 
-- Filters by BHK, furnishing, max rent, max distance from Manyata, and
-  brokerage-free; sortable by distance/rent/recency.
-- **+ Add a listing** lets you log something you spotted in a group in about
-  15 seconds — paste the raw post text into the box at the top of the form
-  and the rest of the fields auto-fill (same parser the extension and mobile
-  share target use), then you just review and save.
-- Two modes for where listings live:
-  - **No backend configured (default):** listings come from `data/listings.json`
-    (empty by default — this app does not ship with fake/sample data) plus
-    anything you add, saved only in your own browser via `localStorage`.
-  - **Shared backend configured (recommended, see below):** listings come from
-    a Firebase Realtime Database everyone (and every capture surface —
-    extension, mobile share, scrapers) reads and writes to — real shared data
-    instead of per-browser storage. **Set this up first** — the extension,
-    mobile share target, and both scrapers all need it to have anywhere to
-    save to.
+## Architecture
 
-## Running it locally
+```
+DISCOVERY → RAW STORAGE → EXTRACTION → VALIDATION → GEOCODING
+→ COMMUTE CALCULATION → HARD FILTERING → DEDUPLICATION → SCORING
+→ SEARCH UI / ALERTS
+```
 
-No build step or install needed — it's static HTML/CSS/JS.
+Implemented in [`pipeline/`](pipeline/), run on a schedule by
+[`.github/workflows/run-pipeline.yml`](.github/workflows/run-pipeline.yml):
+
+| Stage | Module | What it does |
+|---|---|---|
+| Discovery | `pipeline/sources/*.py` | Each source implements one `discover()` method returning raw listings (original text + URL, nothing else guessed). Add a source by subclassing `sources.base.Source`. |
+| Raw storage / freshness | `pipeline/store.py` | Persists to Firebase, tracking `first_seen`/`last_seen`/`last_verified`/`source_status` per listing. |
+| Extraction | `pipeline/extraction.py` | Deterministic regex parsing into BHK, rent, deposit, furnishing, lift, brokerage, owner status, location, available-from. Leaves a field `None` rather than guessing. |
+| Validation | `pipeline/validation.py` | Sanity-bounds values (e.g. a "rent" of ₹7 is a mis-parse, not a real rent) — out-of-range becomes UNKNOWN, not clamped-and-kept. |
+| Geocoding | `pipeline/geocode.py` | Nominatim (OpenStreetMap), cached, rate-limited to its usage policy. |
+| Commute | `pipeline/commute.py` | Google Distance Matrix with live traffic when `GOOGLE_MAPS_API_KEY` is set; OSRM real road-network driving time (no live traffic) otherwise. Every listing records which one computed it. |
+| Hard filtering | `pipeline/filtering.py` | The only stage allowed to set `match_status` — `confirmed` / `needs_verification` / `rejected`, with `fail_reasons` for rejects and `unknown_fields` for unverifiable ones. |
+| Deduplication | `pipeline/dedup.py` | Merges the same property posted on multiple sites (phone number match, or coordinates+rent+BHK match, or fuzzy address+rent+deposit+BHK match), keeping every source URL. |
+| Scoring | `pipeline/scoring.py` | Ranks confirmed matches: commute, then rent, then deposit, then owner-direct confidence, then amenities, then freshness. |
+
+The static site ([`index.html`](index.html) / [`app.js`](app.js)) reads the
+pipeline's output and renders **Confirmed Matches**, a collapsible **Needs
+Verification** section, and **Near Matches** (real listings that fail one
+or more hard requirements, each labelled with exactly which one).
+
+A listing you spot yourself — Facebook group, WhatsApp, anywhere the
+pipeline can't reach — goes through the identical extraction → geocode →
+commute → hard-filter pipeline client-side
+([`filter-client.js`](filter-client.js), [`geo-client.js`](geo-client.js))
+before it's saved, via the **+ Add a listing** form, the
+[Chrome extension](#chrome-extension-facebook-whatsapp-web-anywhere), or the
+[mobile share target](#mobile-android-share-sheet). It is never
+pre-approved just because a human typed it in.
+
+## Sources — what's actually automatable, honestly
+
+| Source | Status | Why |
+|---|---|---|
+| Telegram public channels | **Automated**, free | `t.me/s/<channel>` is Telegram's own public, unauthenticated preview — same as any browser gets with no account. Only works for *channels*, not *groups* (groups require joining, which this deliberately doesn't do). |
+| NoBroker / Housing / 99acres / MagicBricks | **Automated via Apify, needs your own verification** | None publish a public API; all are JS-heavy with anti-bot protection that this project will not attempt to defeat. `pipeline/sources/apify_generic.py` calls a maintained third-party Apify actor per site instead — see [setup below](#apify-setup-nobroker-housing-99acres-magicbricks). |
+| Facebook Marketplace / rental groups | **Not automatable, manual capture only** | Facebook's Graph API doesn't expose Marketplace or group post search, and scraping either violates Facebook's Terms of Service with real ban risk to your account. This project will not bypass that. The [extension](#chrome-extension-facebook-whatsapp-web-anywhere) and [mobile share target](#mobile-android-share-sheet) turn "I saw a post" into a filtered, hard-checked listing in one action — you're still the one reading the group. |
+| Other public owner listings | **Manual capture**, same path as Facebook | Add a source connector (`pipeline/sources/base.Source`) if you find one with a legitimate public API/preview, same pattern as Telegram. |
+
+## Running the pipeline
 
 ```bash
-python3 -m http.server 8000
-# then open http://localhost:8000
+cd pipeline
+python3 run.py --dry-run     # discover + process, print a sample, write nothing
+python3 run.py                # writes confirmed/needs_verification/rejected listings to Firebase
+```
+
+No third-party Python packages required — stdlib only.
+
+Offline unit tests (no network — exercises extraction/filtering/dedup/scoring
+against synthetic text, safe to run anywhere):
+
+```bash
+cd pipeline
+python3 tests/test_pipeline_offline.py
 ```
 
 ## Setting up the shared backend (Firebase Realtime Database)
 
-This turns the app from "sample data + your own browser" into "one shared,
-live list everyone you invite can read and add to" — on your own free Google
-account, genuinely free forever at this scale (not a one-time credit).
-
-This used to be a Google Sheet fronted by an Apps Script Web App — that
-approach was dropped because Apps Script's per-script "deploy as web app"
-authorization flow is fragile (it's known to loop/fail for some accounts and
-browser configurations) and there's no way to fix that from outside your own
-browser session. Firebase's project-level setup doesn't hit that flow at all.
+Same backend the site, extension, share target, and pipeline all read/write
+to — genuinely free at this scale.
 
 1. Go to [console.firebase.google.com](https://console.firebase.google.com),
-   sign in, **Create a project** (any name), skip Google Analytics if asked.
+   sign in, **Create a project**, skip Google Analytics if asked.
 2. Left sidebar → **Build → Realtime Database → Create Database**. Pick any
-   location, choose **Start in test mode**, click **Enable**.
-3. Click the **Rules** tab, replace the contents with:
+   location, **Start in test mode**, click **Enable**.
+3. **Rules** tab → replace with:
    ```json
-   {
-     "rules": {
-       ".read": true,
-       ".write": true
-     }
-   }
+   { "rules": { ".read": true, ".write": true } }
    ```
-   Click **Publish**. (Firebase's default test-mode rules expire after 30
-   days — this makes it permanent. There's no login/auth on reads or writes
-   this way, which is fine for a small personal tool like this but worth
-   knowing: anyone with the URL can write to it.)
-4. Back on the **Data** tab, copy the URL shown near the top — looks like
-   `https://your-project-default-rtdb.firebaseio.com`.
-5. Paste that URL into `config.js` in this repo:
+   **Publish**. (No auth on reads/writes — fine for a personal tool, but
+   anyone with the URL can write to it.)
+4. **Data** tab → copy the URL (`https://your-project-default-rtdb.firebaseio.com`).
+5. Paste it into `config.js`:
    ```js
-   const CONFIG = {
-     FIREBASE_DB_URL: "https://your-project-default-rtdb.firebaseio.com",
-   };
+   const CONFIG = { FIREBASE_DB_URL: "https://your-project-default-rtdb.firebaseio.com", ... };
    ```
-6. Commit and push. The site will now read and write listings from that
-   database — reload the page and the "+ Add a listing" form will save
-   straight to it for everyone.
+6. In this repo's **Settings → Secrets and variables → Actions**, add secret
+   `FIREBASE_DB_URL` with the same value (the pipeline workflow needs it).
+7. Commit and push.
 
-To let other people (flatmates, friends) contribute, just share the site URL
-with them — the "+ Add a listing" button already writes to the same shared
-database. You can also browse/edit the data directly from the **Data** tab in
-the Firebase console.
+Listings live under the `pipeline_listings` node, shaped like
+[`pipeline/listing_schema.py`](pipeline/listing_schema.py)'s `Listing`
+dataclass (source, url, raw_text, every extracted/geocoded/scored field,
+`match_status`, `fail_reasons`, `unknown_fields`).
 
-### Listing fields
+## Commute calculation setup (Google Maps, optional but recommended)
 
-| Field | Description |
-|---|---|
-| `title` | Short description |
-| `locality` | Area name (e.g. Hebbal, Nagawara, Thanisandra) |
-| `distanceKm` | Approx. distance from Manyata Tech Park |
-| `bhk` | Number of bedrooms |
-| `furnishing` | `full`, `semi`, or `none` |
-| `rent` | Monthly rent in ₹ |
-| `deposit` | Security deposit in ₹ |
-| `brokerage` | `true`/`false` |
-| `contact` | Who to contact |
-| `source` | Where you found it (group name, site) |
-| `link` | URL to the original post, if any |
-| `notes` | Anything else worth remembering |
+Without a key, commute times come from OSRM — real road-network driving
+time, but **no live traffic**, which matters a lot in Bangalore. With a key,
+commute times use Google's Distance Matrix API with `departure_time=now`
+and `traffic_model=best_guess` — genuinely traffic-aware, and every listing
+records which provider computed its number (`commute_source`).
+
+1. [console.cloud.google.com](https://console.cloud.google.com) → create a
+   project → enable **Distance Matrix API** and **Geocoding API** → enable
+   billing (Google's free monthly credit typically covers personal-scale
+   usage, but billing must be turned on to get a working key).
+2. **APIs & Services → Credentials** → create an API key. Restrict it to
+   the Distance Matrix API.
+3. Add repo secret `GOOGLE_MAPS_API_KEY`. Never put this key in `config.js`
+   or any file the browser loads — it's used only server-side, in the
+   scheduled pipeline. Manually captured listings (extension/share target)
+   always use the free OSRM path, by design, so a paid key never ships to
+   a browser where anyone could read it from page source.
+
+## Apify setup (NoBroker, Housing, 99acres, MagicBricks)
+
+1. Sign up at [apify.com](https://apify.com) (free tier available).
+2. For each site you want, find (or build) an Apify actor that scrapes it,
+   and note its actor id and real input/output schema from its **Input**
+   and **Runs → Dataset** tabs — `pipeline/sources/apify_generic.py`'s
+   `FIELD_CANDIDATES` is a best-effort guess at common field names and may
+   not match; adjust it once you've inspected a real run's output.
+3. Add repo secret `APIFY_TOKEN`.
+4. Add repo variable `APIFY_SITES` (e.g. `nobroker,housing`).
+5. For each site in that list, add repo variables
+   `APIFY_SITE_<NAME>_ACTOR_ID` and, if the actor needs specific input,
+   `APIFY_SITE_<NAME>_INPUT` (a JSON string) — e.g.
+   `APIFY_SITE_NOBROKER_ACTOR_ID`, `APIFY_SITE_NOBROKER_INPUT`.
+6. Test with **Actions → Run FlatFinder discovery pipeline → Run workflow**,
+   dry run checked, and check the logs.
+
+A site with no actor id configured is silently skipped, not guessed at.
 
 ## Chrome extension (Facebook, WhatsApp Web, anywhere)
 
-Lives in [`extension/`](extension/). It does not scrape anything in the
-background — it only acts on text you've already selected on a page you're
-already looking at, which is why it's fine for Facebook and WhatsApp Web even
-though an automated background scraper against either would not be.
+Lives in [`extension/`](extension/). It never scrapes in the background —
+only acts on text you've already selected on a page you're already looking
+at, which is why it's fine for Facebook and WhatsApp Web even though an
+automated background scraper against either would not be.
 
-**Install (unpacked, since it's not published to the Chrome Web Store):**
+**Install (unpacked):**
+1. `chrome://extensions` → **Developer mode** → **Load unpacked** → select
+   `extension/`.
+2. Toolbar icon → **Settings** → paste your Firebase Database URL → **Save**.
 
-1. Go to `chrome://extensions`, turn on **Developer mode** (top right).
-2. Click **Load unpacked**, select this repo's `extension/` folder.
-3. Click the FlatFinder icon in your toolbar → **Settings** → paste your
-   Firebase Database URL (same one from `config.js`) → **Save settings**.
-
-**Use it:**
-
-- Select a post's text on any page (a Facebook group, WhatsApp Web, a listing
-  site) → right-click → **Save selection to FlatFinder** → the popup opens
-  with fields already parsed out (locality, BHK, rent, contact, etc.) →
-  review/edit → **Save**.
-- Or just click the toolbar icon any time and paste text into the box at the
-  top — same parsing, for when a right-click isn't convenient.
-- Fields the parser wasn't confident about are highlighted so you know what
-  to double check before saving.
+**Use:** select a post's text on any page → right-click → **Save selection
+to FlatFinder**, or click the toolbar icon and paste → review the
+auto-filled fields (BHK, lift, brokerage, owner status all extracted the
+same way the pipeline does it) → **Save**. The popup computes geocode +
+commute + the hard filter before saving and shows you the resulting match
+status.
 
 ## Mobile (Android share sheet)
 
-The site is installable as a PWA, which adds it to Android's native **Share**
-menu — share a post straight from the WhatsApp, Facebook, or Telegram app
-without switching apps or retyping anything:
+Installable as a PWA, which adds it to Android's **Share** menu.
 
-1. Open the site on your phone in Chrome → menu → **Add to Home screen** /
-   **Install app**.
-2. In WhatsApp/Facebook/Telegram, open a post → **Share** → **FlatFinder**.
-3. A page opens with fields already parsed from the shared text → review →
-   **Save listing**.
+1. Open the site on your phone in Chrome → **Add to Home screen**.
+2. In WhatsApp/Facebook/Telegram, **Share** a post → **FlatFinder**.
+3. Review the auto-filled, hard-filtered fields → **Save listing**.
 
-This needs the shared Firebase backend below configured (it saves straight to
-the database, there's no per-device local mode here). iOS Safari
-doesn't support share targets for installed web apps the way Android does —
-on iPhone, copy the post text and paste it into the **+ Add a listing** paste
-box on the main site instead; same parser, one extra tap.
+Needs the shared Firebase backend configured. iOS Safari doesn't support
+share targets for installed web apps — copy the post text into the
+**+ Add a listing** paste box on the main site instead.
 
-## Auto-importing from Telegram public channels (verified working)
+## Freshness
 
-Lives in [`scripts/scrape_telegram.py`](scripts/scrape_telegram.py), run on a
-schedule by [`.github/workflows/scrape-telegram.yml`](.github/workflows/scrape-telegram.yml).
+Every listing tracks `first_seen`, `last_seen`, `last_verified`, and a
+derived `source_status`:
 
-**What it reads and why that's fine:** Telegram *channels* (not groups) with
-public previews enabled serve their recent messages at `t.me/s/<channel>` —
-a plain, unauthenticated HTML page, the same thing you'd see visiting that
-URL in an incognito browser with no Telegram account at all. No Bot API
-token, no MTProto client, no login. This script just fetches that public
-page and parses it — the markup it looks for
-(`data-post="channel/id"` on each message,
-`class="tgme_widget_message_text"` for the body) was checked against a live
-fetch before this was written, not guessed.
+- **Active** — seen or verified recently.
+- **Not recently verified** — still showing up in discovery, but nothing
+  has re-confirmed it exists recently.
+- **Possibly unavailable** — hasn't been re-discovered in a while.
+- **Unavailable** — hasn't been re-discovered in a long while.
 
-It only saves a post if it (a) mentions one of the target localities and
-(b) explicitly says "no brokerage" (or equivalent) in the text — posts that
-don't say either are skipped rather than assumed.
+Thresholds live in `pipeline/config.py` (`VERIFY_STALE_AFTER_HOURS`,
+`POSSIBLY_UNAVAILABLE_AFTER_HOURS`).
 
-**Default channels:** `HousingBangalore` and `housingourbengaluru` — both
-confirmed working (each returned real, current, correctly-parsed listings
-with owner WhatsApp numbers when this was tested). Note the difference
-between **channels** (public preview works) and **groups** (it doesn't —
-`t.me/s/<name>` for a group redirects instead of showing content, since
-reading a group requires actually joining it, which this script deliberately
-doesn't do). Before adding another name to `TG_CHANNELS`, confirm it's a
-channel:
-```bash
-curl -sI https://t.me/s/<name> | head -1   # 200 = channel, works. 302 = group, won't.
-```
+## Alerts (not yet wired up)
 
-**Setup:**
-
-1. Set up the shared Firebase backend above first — this scraper needs
-   somewhere to save to.
-2. In this repo's **Settings → Secrets and variables → Actions**, add secret
-   `FIREBASE_DB_URL` (the same URL from `config.js`).
-3. Optionally add repo variable `TG_CHANNELS` (comma-separated channel
-   usernames) to use a different list than the default above.
-4. Test it manually first: **Actions → Scrape public Telegram channels → Run
-   workflow**, with "Dry run" checked — check the logs for what it found.
-5. Once happy, it runs automatically every 30 minutes (free — no paid API
-   involved, unlike the NoBroker one below). Change the `cron` line in the
-   workflow file to adjust frequency.
-
-## Auto-importing NoBroker listings (via Apify, optional, needs verification)
-
-NoBroker itself has no public API, and its site couldn't be inspected directly
-while building this (network access was blocked in that environment), so
-rather than guess at scraping it blind, this uses **Apify's existing NoBroker
-scraper actor** as a maintained third party that already solved that problem.
-A scheduled GitHub Actions workflow calls it, filters for what you care
-about, and pushes new listings into the same shared Firebase database — so
-they show up in the app alongside everything else.
-
-**Before relying on this, verify it actually works** — the exact input
-parameters and output field names for the Apify actor were not directly
-observable either, so `scripts/scrape_nobroker.py` makes a best-effort guess
-(see the comments at the top of that file). To check/fix it:
-
-1. Sign up at [apify.com](https://apify.com) (has a free usage tier) and find
-   the NoBroker scraper actor (search "NoBroker" in the Apify Store). Note its
-   exact actor ID from the URL or its "API" tab.
-2. Open its **Input** tab to see the real input schema, and its **Runs →
-   Dataset** on a past run to see real output field names. Update
-   `APIFY_INPUT` and `FIELD_CANDIDATES` in `scripts/scrape_nobroker.py` to
-   match if they differ from the guesses there.
-3. In this repo's **Settings → Secrets and variables → Actions**:
-   - Add secret `APIFY_TOKEN` (from your Apify account's Integrations page).
-   - Add secret `FIREBASE_DB_URL` (the same URL from `config.js` — you've
-     likely already added this for the Telegram scraper above).
-   - Optionally add repo variable `APIFY_ACTOR_ID` if it differs from the
-     `parseforge~nobroker-scraper` default guessed in the script.
-4. Test it manually first: **Actions → Scrape NoBroker listings → Run
-   workflow**, with "Dry run" checked. Check the logs — it prints a raw
-   sample item and how many it could normalize. Fix `FIELD_CANDIDATES` and
-   re-run until normalization looks right, *then* uncheck dry run.
-5. Once confirmed, it runs automatically every 2 hours (edit the `cron` line
-   in `.github/workflows/scrape-nobroker.yml` to change the frequency — keep
-   it infrequent, each run costs Apify usage credits).
-
-## Telegram notifications (removed, needs rebuilding)
-
-This used to work by way of the Apps Script backend (a server-side function
-ran on every new row and pinged a Telegram bot). Now that the backend is a
-plain Firebase database with no server code attached, there's nothing to
-trigger that ping automatically anymore — dropped for now rather than shipped
-half-working. Options if this is wanted back: a lightweight polling script
-(GitHub Actions, checks for new entries every few minutes and calls the
-Telegram Bot API directly), or Firebase Cloud Functions (needs the paid
-"Blaze" plan, which still has a genuine free tier under real usage but does
-require adding a billing method).
+The pipeline already knows which listings are newly `confirmed` each run
+(`first_seen == last_seen` on a `confirmed` listing) — a Telegram/WhatsApp
+notification step can hook into `pipeline/run.py` after the SCORING stage
+to push those out. Not built yet because it needs your own notification
+channel (a Telegram bot token, or similar) — happy to wire it in once you
+pick one; it will only ever fire for genuinely confirmed matches, never for
+needs-verification or rejected listings.
 
 ## Ideas for later
 
-- Add a "contacted" / "visited" status per listing to track your own progress.
-- Auto-calculate `distanceKm` from a typed locality via a maps/geocoding API
-  instead of estimating it by hand.
-- Look into whether 99acres/MagicBricks offer a similar Apify actor or
-  official partner API worth adding alongside NoBroker.
-- Find more public (not group) Telegram channels for Indiranagar/HSR
-  specifically and add them to `TG_CHANNELS` — the current defaults skew
-  North Bangalore.
-- Publish the extension to the Chrome Web Store instead of load-unpacked, if
-  it ends up getting used enough to be worth the review process.
+- LLM-assisted extraction pass for listings the regex pass leaves partially
+  UNKNOWN (a `pipeline/llm_extract.py` layered on top of `extraction.py`,
+  using `ANTHROPIC_API_KEY` — never allowed to turn UNKNOWN into a
+  hard-filter pass on its own, only to suggest a value for human review).
+- Publish the extension to the Chrome Web Store instead of load-unpacked.
+- Add more public (channel, not group) Telegram sources.
