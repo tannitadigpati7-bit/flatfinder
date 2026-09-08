@@ -6,7 +6,11 @@
 
 (function (root) {
   function config() {
-    const url = (typeof CONFIG !== "undefined" && CONFIG.SUPABASE_URL) || "";
+    let url = (typeof CONFIG !== "undefined" && CONFIG.SUPABASE_URL) || "";
+    // Supabase's dashboard shows the Project URL right next to the REST API
+    // path (.../rest/v1/) — an easy copy-paste mistake. Strip it so a typo
+    // here doesn't 404 every request instead of just fixing itself.
+    url = url.replace(/\/rest\/v1\/?$/, "");
     const key = (typeof CONFIG !== "undefined" && CONFIG.SUPABASE_ANON_KEY) || "";
     return { url, key };
   }

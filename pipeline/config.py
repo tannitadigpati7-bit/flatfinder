@@ -30,7 +30,13 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 # Supabase — the pipeline writes with the service_role key, which bypasses
 # row-level security entirely (see supabase/schema.sql). Never put this key
 # anywhere client-side; only the public anon key belongs in config.js.
+#
+# Supabase's dashboard shows the "Project URL" right next to the REST API
+# path (.../rest/v1/), which is an easy copy-paste mistake to make — strip
+# it off here rather than 404ing, since store.py appends /rest/v1/... itself.
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+if SUPABASE_URL.endswith("/rest/v1"):
+    SUPABASE_URL = SUPABASE_URL[: -len("/rest/v1")]
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
 NOMINATIM_USER_AGENT = "FlatFinder-Personal/1.0 (single-user rental search; contact via GitHub repo)"
