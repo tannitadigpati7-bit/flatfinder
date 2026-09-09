@@ -155,52 +155,74 @@ button { font-family: inherit; }
 #addListingBtn:hover { opacity: 0.9; }
 
 .results {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
-/* ------------------------------------------------------------- tiles */
-/* Compact grid cell — a glance's worth of info. Tap opens the full
-   detail dialog (#listingDetailDialog) instead of navigating away, so
-   the list stays scannable without every listing eating the screen. */
-.tile {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
+/* --------------------------------------------------------- row items */
+/* Full-width stacked row, colored by rent/brokerage (see rowColorClass
+   in app.js) — the color itself is a hard-requirement signal, not
+   decoration: green = rent within budget, amber = rent unknown, red =
+   rent over budget, blue = a broker is involved (hard fail regardless
+   of rent). Tap goes straight to the source listing. */
+.row-item {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
   cursor: pointer;
-  transition: box-shadow 0.15s, border-color 0.15s;
+  color: #ffffff;
+  transition: transform 0.1s, box-shadow 0.15s;
+  box-shadow: var(--shadow-sm);
 }
-.tile:hover { border-color: #d4d4d8; box-shadow: 0 2px 8px 0 rgb(0 0 0 / 0.06); }
-.near-matches .tile { opacity: 0.85; }
+.row-item:hover { box-shadow: 0 4px 14px 0 rgb(0 0 0 / 0.12); }
+.row-item:active { transform: scale(0.99); }
+.near-matches .row-item { opacity: 0.9; }
 
-.tile-thumb {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  background-color: var(--muted-bg);
-  background-size: cover;
-  background-position: center;
+.row-green { background: #1f7a4d; }
+.row-amber { background: #b45309; }
+.row-red   { background: #b91c1c; }
+.row-blue  { background: #1e3a8a; }
+
+.row-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 0.95rem;
+  font-weight: 700;
 }
-.tile-thumb-empty span { font-size: 1.6rem; opacity: 0.3; }
 
-.tile-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 3px; }
-.tile-rent { font-size: 0.88rem; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
-.tile-sub {
-  font-size: 0.7rem;
-  color: var(--muted);
+.row-text { flex: 1; min-width: 0; }
+.row-title {
+  font-size: 0.92rem;
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.tile-badges { margin-top: 1px; }
-.tile-badges .status-badge { font-size: 0.62rem; padding: 1px 7px; }
+.row-sub {
+  font-size: 0.74rem;
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.row-amount {
+  flex-shrink: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: right;
+}
+.row-amount span { display: block; font-size: 0.62rem; font-weight: 500; opacity: 0.75; }
 
 /* -------------------------------------------------- detail dialog --- */
 /* Everything a tile doesn't show — opened by tapping a tile. Reuses the
@@ -386,7 +408,7 @@ dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
     --warn-muted-fg: #eab308;
   }
   .view-link:hover { background: var(--muted-bg); border-color: #3f3f46; }
-  .tile:hover { border-color: #3f3f46; box-shadow: 0 2px 8px 0 rgb(0 0 0 / 0.3); }
+  .row-item:hover { box-shadow: 0 4px 14px 0 rgb(0 0 0 / 0.4); }
 }
 
 /* ------------------------------------------------------- mobile layout */
@@ -415,13 +437,12 @@ dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
 
   #addListingBtn { width: 100%; min-height: 44px; font-size: 0.95rem; }
 
-  /* Tiles stay multi-column even on small phones (2-3 across) — that's
-     the whole point of the compact grid, so it must not collapse to
-     one giant tile per row here. */
-  .results { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
-
-  .tile-rent { font-size: 0.82rem; }
-  .tile-sub { font-size: 0.66rem; }
+  .results { gap: 8px; }
+  .row-item { padding: 12px 14px; border-radius: 16px; gap: 10px; }
+  .row-icon { width: 34px; height: 34px; font-size: 0.85rem; }
+  .row-title { font-size: 0.86rem; }
+  .row-sub { font-size: 0.7rem; }
+  .row-amount { font-size: 0.86rem; }
 
   .detail-content { padding: 4px 16px 20px; }
   .detail-thumb { width: calc(100% + 32px); margin: -4px -16px 4px; }
