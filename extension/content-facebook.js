@@ -16,7 +16,6 @@
 // the manual select+right-click flow (unaffected by this) still works.
 
 const BUTTON_CLASS = "flatfinder-capture-btn";
-const MARKED_ATTR = "data-flatfinder-marked";
 
 function extractPostText(article) {
   return (article.innerText || "").trim();
@@ -63,9 +62,17 @@ function makeButton(article) {
   return btn;
 }
 
-function markArticle(article) {
-  if (article.hasAttribute(MARKED_ATTR)) return;
-  article.setAttribute(MARKED_ATTR, "1");
+// Facebook periodically re-renders a post's own DOM subtree (an image
+// finishing load, telemetry/ad-pixel updates, etc.) as part of normal React
+// reconciliation. React only knows about nodes it rendered, so anything we
+// append gets silently stripped out on the next re-render of that subtree —
+// while the parent `[role="article"]` element itself usually survives, so
+// an "already handled this article" flag on the article would go stale and
+// never fire again. Checking for the button's actual live presence on every
+// scan (instead of trusting a flag) makes this self-healing: it just gets
+// re-added the next time scan() runs after Facebook wipes it.
+function ensureButton(article) {
+  if (article.querySelector(":scope > ." + BUTTON_CLASS)) return;
 
   const computedPosition = getComputedStyle(article).position;
   if (computedPosition === "static") {
@@ -75,9 +82,15 @@ function markArticle(article) {
 }
 
 function scan() {
-  document.querySelectorAll('[role="article"]:not([' + MARKED_ATTR + "])").forEach(markArticle);
+  document.querySelectorAll('[role="article"]').forEach(ensureButton);
 }
 
 const observer = new MutationObserver(() => scan());
 observer.observe(document.body, { childList: true, subtree: true });
 scan();
+
+// Belt-and-suspenders: also re-check on an interval, since some of
+// Facebook's re-renders can happen without a MutationObserver-visible
+// childList change on an ancestor we're watching (e.g. React reusing the
+// same DOM node instance internally).
+setInterval(scan, 2000);
