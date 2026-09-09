@@ -22,6 +22,15 @@
 
 * { box-sizing: border-box; }
 
+/* Belt-and-suspenders for every el.hidden = true/false toggle in app.js:
+   without this, any class below that sets its own `display` (e.g.
+   .onboarding{display:flex}, .results{display:flex}) silently wins over
+   the browser's default `[hidden]{display:none}` at equal specificity,
+   so the hidden attribute stops actually hiding anything. This one rule
+   (attribute selector + !important beats any single class unconditionally)
+   fixes that for every current and future hidden toggle at once. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
