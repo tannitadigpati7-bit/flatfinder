@@ -26,6 +26,12 @@ const els = {
   cancelAdd: document.getElementById("cancelAdd"),
   pasteBox: document.getElementById("pasteBox"),
   parseStatus: document.getElementById("parseStatus"),
+  viewCards: document.getElementById("viewCards"),
+  viewTable: document.getElementById("viewTable"),
+  cardsView: document.getElementById("cardsView"),
+  tableView: document.getElementById("tableView"),
+  allListingsBody: document.getElementById("allListingsBody"),
+  allListingsTable: document.getElementById("allListingsTable"),
 };
 
 // ---------------------------------------------------------------- loading
@@ -134,6 +140,134 @@ function renderNearMatchCard(listing) {
   return card;
 }
 
+// ------------------------------------------------------ all listings table
+
+const MATCH_STATUS_LABEL = { confirmed: "Confirmed", needs_verification: "Needs verification", rejected: "Rejected" };
+const PERSONAL_STATUS_OPTIONS = [
+  ["", "—"],
+  ["not_contacted", "Not contacted"],
+  ["contacted", "Contacted"],
+  ["visited", "Visited"],
+  ["not_interested", "Not interested"],
+];
+
+const tableSort = { field: "first_seen", dir: "desc" };
+
+function sortValue(listing, field) {
+  const v = listing[field];
+  if (field === "lift") return v === true ? 1 : v === false ? 0 : -1;
+  if (v === null || v === undefined) return field === "commute_minutes" || field === "rent" || field === "deposit" ? Infinity : "";
+  return v;
+}
+
+function sortedListings() {
+  const items = state.listings.slice();
+  const { field, dir } = tableSort;
+  items.sort((a, b) => {
+    const av = sortValue(a, field);
+    const bv = sortValue(b, field);
+    let cmp;
+    if (typeof av === "number" && typeof bv === "number") cmp = av - bv;
+    else cmp = String(av).localeCompare(String(bv));
+    return dir === "asc" ? cmp : -cmp;
+  });
+  return items;
+}
+
+function renderAllListingsRow(listing) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><span class="status-badge status-${listing.match_status}">${MATCH_STATUS_LABEL[listing.match_status] || listing.match_status}</span></td>
+    <td>${fmtMoney(listing.rent)}</td>
+    <td>${fmtMoney(listing.deposit)}</td>
+    <td>${listing.bhk ?? "UNKNOWN"}</td>
+    <td>${furnishingLabel(listing.furnishing)}</td>
+    <td>${boolIcon(listing.lift)}</td>
+    <td>${listing.brokerage_status === "zero" ? "₹0" : listing.brokerage_status === "broker" ? "Broker" : "UNKNOWN"}</td>
+    <td>${listing.commute_minutes != null ? Math.round(listing.commute_minutes) + " min" : "UNKNOWN"}</td>
+    <td>${escapeHtml(listing.location || listing.address || "UNKNOWN")}</td>
+    <td>${escapeHtml(listing.source || "unknown")}</td>
+    <td>${timeAgo(listing.first_seen) || "UNKNOWN"}</td>
+    <td>${listing.url ? `<a href="${escapeAttr(listing.url)}" target="_blank" rel="noopener">Open</a>` : "—"}</td>
+    <td><input type="text" class="notes-input" value="${escapeAttr(listing.notes || "")}" placeholder="Add a note…"></td>
+    <td>
+      <select class="status-select">
+        ${PERSONAL_STATUS_OPTIONS.map(([v, l]) => `<option value="${v}" ${listing.personal_status === v ? "selected" : ""}>${l}</option>`).join("")}
+      </select>
+    </td>
+  `;
+
+  const notesInput = tr.querySelector(".notes-input");
+  const statusSelect = tr.querySelector(".status-select");
+  let notesTimer = null;
+
+  async function saveField(field, value) {
+    listing[field] = value;
+    try {
+      await window.FlatFinderSupabase.updateNotes(listing.id, { [field]: value });
+    } catch {
+      // Best-effort — the field keeps its edited value in the UI even if
+      // the save failed; the next successful edit will retry the write.
+    }
+  }
+
+  notesInput.addEventListener("input", () => {
+    clearTimeout(notesTimer);
+    notesTimer = setTimeout(() => saveField("notes", notesInput.value), 600);
+  });
+  statusSelect.addEventListener("change", () => saveField("personal_status", statusSelect.value));
+
+  return tr;
+}
+
+function renderAllListingsTable() {
+  if (!els.allListingsBody) return;
+  els.allListingsBody.innerHTML = "";
+  sortedListings().forEach((l) => els.allListingsBody.appendChild(renderAllListingsRow(l)));
+
+  if (els.allListingsTable) {
+    els.allListingsTable.querySelectorAll("th[data-sort]").forEach((th) => {
+      th.classList.toggle("sorted", th.dataset.sort === tableSort.field);
+      th.classList.toggle("sorted-asc", th.dataset.sort === tableSort.field && tableSort.dir === "asc");
+    });
+  }
+}
+
+if (els.allListingsTable) {
+  els.allListingsTable.querySelectorAll("th[data-sort]").forEach((th) => {
+    th.addEventListener("click", () => {
+      const field = th.dataset.sort;
+      if (tableSort.field === field) {
+        tableSort.dir = tableSort.dir === "asc" ? "desc" : "asc";
+      } else {
+        tableSort.field = field;
+        tableSort.dir = "asc";
+      }
+      renderAllListingsTable();
+    });
+  });
+}
+
+if (els.viewCards && els.viewTable) {
+  els.viewCards.addEventListener("click", () => {
+    els.cardsView.hidden = false;
+    els.tableView.hidden = true;
+    els.viewCards.classList.add("active");
+    els.viewCards.setAttribute("aria-selected", "true");
+    els.viewTable.classList.remove("active");
+    els.viewTable.setAttribute("aria-selected", "false");
+  });
+  els.viewTable.addEventListener("click", () => {
+    els.cardsView.hidden = true;
+    els.tableView.hidden = false;
+    els.viewTable.classList.add("active");
+    els.viewTable.setAttribute("aria-selected", "true");
+    els.viewCards.classList.remove("active");
+    els.viewCards.setAttribute("aria-selected", "false");
+    renderAllListingsTable();
+  });
+}
+
 function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str ?? "";
@@ -173,6 +307,8 @@ function render() {
       ? "No verified matches found right now."
       : "No shared backend configured (see README) — nothing has been discovered yet.";
   }
+
+  renderAllListingsTable();
 }
 
 // ----------------------------------------------------------- add a listing

@@ -65,6 +65,17 @@ create table if not exists public.listings (
   constraint listings_source_unique unique (source, source_listing_id)
 );
 
+-- Personal tracking (yours to edit from the "All Listings" table view —
+-- separate from match_status, which stays pipeline-owned and untouched by
+-- this). Added via ALTER rather than inside the CREATE TABLE above so
+-- re-running this file adds them to a database that already has the
+-- `listings` table from an earlier run (CREATE TABLE IF NOT EXISTS is a
+-- no-op once the table exists, so new columns must be added this way to
+-- actually reach it). Status is free text on purpose, e.g. "Not
+-- contacted", "Contacted", "Visited", "Not interested", or anything else.
+alter table public.listings add column if not exists notes text;
+alter table public.listings add column if not exists personal_status text;
+
 create index if not exists listings_match_status_idx on public.listings (match_status);
 create index if not exists listings_commute_idx on public.listings (commute_minutes);
 create index if not exists listings_first_seen_idx on public.listings (first_seen desc);
@@ -92,3 +103,22 @@ create policy "Public insert for manual capture"
   on public.listings for insert
   to anon
   with check (true);
+
+-- The "All Listings" table view on the frontend lets you track your own
+-- progress per listing (notes, a status like "Contacted"/"Visited") —
+-- this needs UPDATE, which nothing above grants. Rather than opening
+-- UPDATE on the whole row (which would let a client overwrite the
+-- pipeline's own match_status/score/fail_reasons — fields that must stay
+-- authoritative and untouched by anything but the pipeline), grant it at
+-- the column level: the RLS policy allows updating any row, but the table
+-- privilege restricts *which columns* an UPDATE statement may touch to
+-- exactly these two. Supabase enforces both checks on every UPDATE.
+drop policy if exists "Public update of personal notes/status" on public.listings;
+create policy "Public update of personal notes/status"
+  on public.listings for update
+  to anon
+  using (true)
+  with check (true);
+
+revoke update on public.listings from anon;
+grant update (notes, personal_status) on public.listings to anon;

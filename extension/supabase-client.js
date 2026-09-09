@@ -1,8 +1,11 @@
-// Minimal Supabase REST (PostgREST) client — just the two calls FlatFinder
-// needs against the `listings` table (see supabase/schema.sql): read
-// everything, insert a manually captured listing. Uses the public anon
-// key, which row-level security restricts to exactly those two
-// operations — see schema.sql's policy comments for what it can't do.
+// Minimal Supabase REST (PostgREST) client — the calls FlatFinder needs
+// against the `listings` table (see supabase/schema.sql): read everything,
+// insert a manually captured listing, and update just the notes/
+// personal_status columns on an existing row. Uses the public anon key,
+// which row-level security + column grants restrict to exactly these
+// operations — see schema.sql's policy comments for what it can't do
+// (in particular: it cannot touch match_status, score, or any other
+// pipeline-owned field).
 
 (function (root) {
   function config() {
@@ -52,5 +55,27 @@
     return rows[0];
   }
 
-  root.FlatFinderSupabase = { isConfigured, fetchListings, insertListing };
+  // Only ever sends notes/personal_status — the anon key's write access is
+  // restricted to exactly those two columns at the database level (see
+  // supabase/schema.sql), so sending anything else here would just fail.
+  async function updateNotes(id, fields) {
+    const { url, key } = config();
+    if (!url || !key) throw new Error("Supabase not configured");
+    const body = {};
+    if ("notes" in fields) body.notes = fields.notes;
+    if ("personal_status" in fields) body.personal_status = fields.personal_status;
+    const res = await fetch(`${url}/rest/v1/listings?id=eq.${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  }
+
+  root.FlatFinderSupabase = { isConfigured, fetchListings, insertListing, updateNotes };
 })(typeof window !== "undefined" ? window : this);

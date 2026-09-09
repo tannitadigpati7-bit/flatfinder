@@ -118,10 +118,15 @@ JSON blob with open read/write rules).
    - **Public insert** — lets manually captured listings (paste box,
      extension, mobile share) save without exposing a privileged key in the
      browser.
-   - **No public update/delete** — once a row exists, only the pipeline
-     (via its service-role key, which bypasses RLS) can change it. This is
+   - **No public update/delete of pipeline fields** — once a row exists,
+     rent/deposit/match_status/score/etc. can only be changed by the
+     pipeline itself (via its service-role key, which bypasses RLS). This is
      tighter than the old Firebase rules, which allowed anyone with the URL
      to edit or delete any row.
+   - **Public update of exactly two columns** (`notes`, `personal_status`)
+     — powers the "All Listings" table's inline notes/status editing (see
+     below). Column-level grants mean the anon key can only ever touch
+     these two fields, never `match_status` or anything else.
 3. **Project Settings → API** → copy the **Project URL** and the **anon
    public** key.
 4. Paste both into `config.js` (and `extension/config.js` — keep them in
@@ -130,8 +135,8 @@ JSON blob with open read/write rules).
    const CONFIG = { SUPABASE_URL: "https://your-project.supabase.co", SUPABASE_ANON_KEY: "eyJ...", ... };
    ```
    The anon key is safe to ship in client-side code — RLS is what actually
-   enforces what it can do (read everything, insert new rows, nothing
-   else).
+   enforces what it can do (read everything, insert new rows, and edit the
+   `notes`/`personal_status` columns — nothing else).
 5. Same **Project Settings → API** page → copy the **service_role** key.
    **Never** put this in `config.js` or anywhere the browser loads — it
    bypasses RLS entirely. In this repo's **Settings → Secrets and variables
@@ -140,10 +145,35 @@ JSON blob with open read/write rules).
    pipeline workflow uses this.
 6. Commit and push.
 
-Listings live under the `pipeline_listings` node, shaped like
+If you already ran an earlier version of `schema.sql` and are updating an
+existing project (e.g. to pick up the `notes`/`personal_status` columns
+below), just re-run the whole file again — every statement in it is
+idempotent (`create table if not exists`, `alter table ... add column if
+not exists`, `drop policy if exists` before each `create policy`), so
+re-running is always safe and only adds what's missing.
+
+Listings live in the `listings` table, shaped like
 [`pipeline/listing_schema.py`](pipeline/listing_schema.py)'s `Listing`
 dataclass (source, url, raw_text, every extracted/geocoded/scored field,
-`match_status`, `fail_reasons`, `unknown_fields`).
+`match_status`, `fail_reasons`, `unknown_fields`), plus two columns the
+pipeline never touches: `notes` and `personal_status` — see "All Listings
+table" below.
+
+### All Listings table
+
+The frontend's card view only ever shows Confirmed/Needs
+Verification/Near Matches — deliberately never a raw dump, per the
+project's own filtering rules. For seeing genuinely everything (including
+`rejected`), sorting by any column, and tracking your own progress, switch
+to **"All Listings (table)"** at the top of the page:
+
+- Every listing, any status, sortable by clicking a column header.
+- **Notes** and **My status** (Not contacted / Contacted / Visited / Not
+  interested) are yours to edit inline — saved automatically a moment
+  after you stop typing/change the dropdown. These two columns are the
+  only thing the browser is allowed to write back to an existing row (see
+  RLS setup above) — editing them can never change a listing's actual
+  `match_status` or any other pipeline-computed field.
 
 ## Commute calculation setup (Google Maps, optional but recommended)
 

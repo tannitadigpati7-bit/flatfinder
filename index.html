@@ -32,24 +32,59 @@
 
   <section class="results-header">
     <h2 id="confirmedCount">Loading…</h2>
-    <button id="addListingBtn" type="button">+ Add a listing I found</button>
+    <div class="results-header-actions">
+      <div class="view-toggle" role="tablist" aria-label="View">
+        <button type="button" id="viewCards" class="view-toggle-btn active" role="tab" aria-selected="true">Cards</button>
+        <button type="button" id="viewTable" class="view-toggle-btn" role="tab" aria-selected="false">All Listings (table)</button>
+      </div>
+      <button id="addListingBtn" type="button">+ Add a listing I found</button>
+    </div>
   </section>
 
-  <section id="confirmedResults" class="results" aria-live="polite"></section>
-  <p id="emptyState" class="empty-state" hidden>No verified matches found right now.</p>
+  <div id="cardsView">
+    <section id="confirmedResults" class="results" aria-live="polite"></section>
+    <p id="emptyState" class="empty-state" hidden>No verified matches found right now.</p>
 
-  <section class="section-block">
-    <button id="needsVerificationToggle" type="button" class="section-toggle">Show</button>
-    <h2 id="needsVerificationCount" class="section-heading">Needs Verification</h2>
-    <p class="hint">Listings where one or more hard requirements couldn't be confirmed from the source. Never treated as a match — check the original listing before acting on any of these.</p>
-    <section id="needsVerificationResults" class="results" hidden></section>
-  </section>
+    <section class="section-block">
+      <button id="needsVerificationToggle" type="button" class="section-toggle">Show</button>
+      <h2 id="needsVerificationCount" class="section-heading">Needs Verification</h2>
+      <p class="hint">Listings where one or more hard requirements couldn't be confirmed from the source. Never treated as a match — check the original listing before acting on any of these.</p>
+      <section id="needsVerificationResults" class="results" hidden></section>
+    </section>
 
-  <section id="nearMatchesSection" class="section-block" hidden>
-    <h2 class="section-heading">Near Matches</h2>
-    <p class="hint">Real listings that fail at least one hard requirement — shown so you know what's out there and exactly why each one doesn't qualify.</p>
-    <section id="nearMatchResults" class="results near-matches"></section>
-  </section>
+    <section id="nearMatchesSection" class="section-block" hidden>
+      <h2 class="section-heading">Near Matches</h2>
+      <p class="hint">Real listings that fail at least one hard requirement — shown so you know what's out there and exactly why each one doesn't qualify.</p>
+      <section id="nearMatchResults" class="results near-matches"></section>
+    </section>
+  </div>
+
+  <div id="tableView" hidden>
+    <p class="hint">Every listing regardless of status — click a column header to sort. Notes and Status are yours to edit and save here; nothing else on this table is editable, and editing never changes a listing's match status.</p>
+    <div class="table-scroll">
+      <table id="allListingsTable">
+        <thead>
+          <tr>
+            <th data-sort="match_status">Status</th>
+            <th data-sort="rent">Rent</th>
+            <th data-sort="deposit">Deposit</th>
+            <th data-sort="bhk">BHK</th>
+            <th data-sort="furnishing">Furnishing</th>
+            <th data-sort="lift">Lift</th>
+            <th data-sort="brokerage_status">Brokerage</th>
+            <th data-sort="commute_minutes">Commute</th>
+            <th data-sort="location">Location</th>
+            <th data-sort="source">Source</th>
+            <th data-sort="first_seen">First seen</th>
+            <th>Link</th>
+            <th>Notes</th>
+            <th>My status</th>
+          </tr>
+        </thead>
+        <tbody id="allListingsBody"></tbody>
+      </table>
+    </div>
+  </div>
 </main>
 
 <dialog id="addListingDialog">

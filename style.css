@@ -54,6 +54,57 @@ main {
   flex-wrap: wrap;
 }
 .results-header h2 { font-size: 1rem; font-weight: 600; color: var(--muted); margin: 0; }
+.results-header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.view-toggle { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.view-toggle-btn {
+  cursor: pointer;
+  border: none;
+  background: var(--surface);
+  color: var(--muted);
+  padding: 7px 12px;
+  font-size: 0.85rem;
+}
+.view-toggle-btn.active { background: var(--accent); color: var(--accent-contrast); }
+
+.table-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+#allListingsTable { width: 100%; border-collapse: collapse; font-size: 0.85rem; background: var(--surface); }
+#allListingsTable th, #allListingsTable td {
+  padding: 8px 10px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+#allListingsTable thead th {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 600;
+  user-select: none;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+}
+#allListingsTable thead th.sorted { color: var(--accent); }
+#allListingsTable thead th.sorted::after { content: " ▼"; font-size: 0.7em; }
+#allListingsTable thead th.sorted.sorted-asc::after { content: " ▲"; }
+#allListingsTable tbody tr:hover { background: rgba(0,0,0,0.02); }
+#allListingsTable .notes-input {
+  width: 160px;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+}
+#allListingsTable .status-select {
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+}
 
 #addListingBtn {
   cursor: pointer;
@@ -119,6 +170,8 @@ main {
   background: #fdf3e2; color: var(--warn); border-color: #f1dfb8;
 }
 .status-badge.status-unavailable { background: #fbeceb; color: var(--danger); border-color: #f2d2cf; }
+.status-badge.status-needs_verification { background: #fdf3e2; color: var(--warn); border-color: #f1dfb8; }
+.status-badge.status-rejected { background: #fbeceb; color: var(--danger); border-color: #f2d2cf; }
 
 .view-link {
   display: inline-block;
@@ -215,6 +268,7 @@ dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
     --warn: #d9a84f;
   }
   .tag, .tag.good, .status-badge { background: #1e2b22; border-color: #2c3f31; }
-  .status-badge.status-possibly_unavailable, .status-badge.status-not_recently_verified { background: #332a17; border-color: #4a3c22; }
-  .status-badge.status-unavailable { background: #2e1e1c; border-color: #45302c; }
+  .status-badge.status-possibly_unavailable, .status-badge.status-not_recently_verified, .status-badge.status-needs_verification { background: #332a17; border-color: #4a3c22; }
+  .status-badge.status-unavailable, .status-badge.status-rejected { background: #2e1e1c; border-color: #45302c; }
+  #allListingsTable tbody tr:hover { background: rgba(255,255,255,0.03); }
 }
