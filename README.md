@@ -204,16 +204,39 @@ same way the pipeline does it) → **Save**. The popup computes geocode +
 commute + the hard filter before saving and shows you the resulting match
 status.
 
-## Mobile (Android share sheet)
+**On Facebook specifically** (`facebook.com`/`m.facebook.com`), a "Save to
+FlatFinder" button is injected directly onto each post/listing on screen
+(`content-facebook.js`) — click it instead of manually selecting text; it
+grabs that one post's visible text and opens the same review popup. Nothing
+is read or sent unless you click that button on that specific post — there
+is no background scanning. This is anchored to Facebook's `role="article"`
+markup, the most stable hook available on a page whose class names change
+often by design; if Facebook changes this and the button stops appearing,
+the manual select+right-click flow above still works unaffected.
 
-Installable as a PWA, which adds it to Android's **Share** menu.
+## Mobile (Android)
+
+Two options, both driven by the same `extension/` code — nothing mobile-specific to build separately.
+
+**Kiwi Browser (recommended for the Facebook capture button):** Kiwi is a
+free, Chromium-based Android browser that loads unpacked Chrome extensions
+exactly like desktop Chrome does. Install Kiwi from the Play Store, go to
+its `chrome://extensions` page, enable Developer mode, **Load unpacked**,
+and select the same `extension/` folder — the injected Facebook button and
+right-click capture both work identically to desktop. Stock Android Chrome
+does not support extensions at all, so this only works in Kiwi (or another
+Chromium browser with extension support).
+
+**Share sheet (works in any Android browser/app, no extension needed):**
+installable as a PWA, which adds it to Android's **Share** menu.
 
 1. Open the site on your phone in Chrome → **Add to Home screen**.
 2. In WhatsApp/Facebook/Telegram, **Share** a post → **FlatFinder**.
 3. Review the auto-filled, hard-filtered fields → **Save listing**.
 
 Needs the shared Supabase backend configured. iOS Safari doesn't support
-share targets for installed web apps — copy the post text into the
+share targets for installed web apps, and Safari extensions require Xcode +
+a paid Apple Developer account to package — copy the post text into the
 **+ Add a listing** paste box on the main site instead.
 
 ## Freshness
