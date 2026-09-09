@@ -52,14 +52,24 @@ function furnishingLabel(value) {
   return { full: "Fully furnished", semi: "Semi-furnished", none: "Unfurnished" }[value] || "Furnishing UNKNOWN";
 }
 
-function timeAgo(iso) {
+// Manual captures (extension, share target, paste box) all stamp their
+// source_listing_id as `manual-<timestamp>` (see filter-client.js,
+// share.html, popup.js) — that's a reliable, already-existing signal for
+// "you added this yourself," distinct from a scraped listing's first_seen
+// (when the pipeline discovered it, not when anyone added anything).
+function isManuallyAdded(listing) {
+  return typeof listing.source_listing_id === "string" && listing.source_listing_id.startsWith("manual-");
+}
+
+function timeAgo(iso, listing) {
   if (!iso) return "";
+  const verb = listing && isManuallyAdded(listing) ? "Added by you" : "Listed";
   const diffMs = Date.now() - new Date(iso).getTime();
   const mins = Math.round(diffMs / 60000);
-  if (mins < 60) return `Listed ${mins} min ago`;
+  if (mins < 60) return `${verb} ${mins} min ago`;
   const hours = Math.round(mins / 60);
-  if (hours < 48) return `Listed ${hours}h ago`;
-  return `Listed ${Math.round(hours / 24)}d ago`;
+  if (hours < 48) return `${verb} ${hours}h ago`;
+  return `${verb} ${Math.round(hours / 24)}d ago`;
 }
 
 const STATUS_LABEL = {
@@ -122,7 +132,7 @@ function renderConfirmedCard(listing) {
     <div class="commute">🚗 ${listing.commute_minutes != null ? Math.round(listing.commute_minutes) + " min" : "UNKNOWN"} to ${escapeHtml(OFFICE_NAME)}${listing.commute_source === "google_distance_matrix_traffic" ? " (traffic-aware)" : listing.commute_source === "osrm_driving" ? " (no live traffic)" : ""}</div>
     <div class="owner-line">${listing.owner_status === "owner" ? "Owner-direct ✓" : "Owner/broker status UNKNOWN"}</div>
     <div class="meta">
-      ${timeAgo(listing.first_seen)} · via ${escapeHtml(listing.source || "unknown source")}
+      ${timeAgo(listing.first_seen, listing)} · via ${escapeHtml(listing.source || "unknown source")}
       ${listing.merged_sources && listing.merged_sources.length > 1 ? `<br>Also seen on: ${listing.merged_sources.map((s) => escapeHtml(s.source)).join(", ")}` : ""}
     </div>
     ${listing.score_reasons && listing.score_reasons.length ? `<div class="why">Ranked for: ${listing.score_reasons.map(escapeHtml).join(" · ")}</div>` : ""}
@@ -145,7 +155,7 @@ function renderNeedsVerificationCard(listing) {
     <div class="unknowns">Needs verification: ${listing.unknown_fields.map(escapeHtml).join(", ")}</div>
     <div class="location">📍 ${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</div>
     <div class="commute">🚗 ${listing.commute_minutes != null ? Math.round(listing.commute_minutes) + " min" : "UNKNOWN"} to ${escapeHtml(OFFICE_NAME)}</div>
-    <div class="meta">${timeAgo(listing.first_seen)} · via ${escapeHtml(listing.source || "unknown source")}</div>
+    <div class="meta">${timeAgo(listing.first_seen, listing)} · via ${escapeHtml(listing.source || "unknown source")}</div>
     ${listing.url ? `<a class="view-link" href="${escapeAttr(listing.url)}" target="_blank" rel="noopener">View Original Listing</a>` : '<div class="view-link disabled">No source link available</div>'}
   `;
   attachCardClickthrough(card, listing);
@@ -216,7 +226,7 @@ function renderAllListingsRow(listing) {
     <td>${listing.commute_minutes != null ? Math.round(listing.commute_minutes) + " min" : "UNKNOWN"}</td>
     <td>${escapeHtml(listing.location || listing.address || "UNKNOWN")}</td>
     <td>${escapeHtml(listing.source || "unknown")}</td>
-    <td>${timeAgo(listing.first_seen) || "UNKNOWN"}</td>
+    <td>${timeAgo(listing.first_seen, listing) || "UNKNOWN"}</td>
     <td>${listing.url ? `<a href="${escapeAttr(listing.url)}" target="_blank" rel="noopener">Open</a>` : "—"}</td>
     <td><input type="text" class="notes-input" value="${escapeAttr(listing.notes || "")}" placeholder="Add a note…"></td>
     <td>
