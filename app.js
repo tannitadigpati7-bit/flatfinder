@@ -9,7 +9,7 @@ const REQ = (typeof CONFIG !== "undefined" && CONFIG.REQUIREMENTS) || {};
 const OFFICE_ADDRESS = (typeof CONFIG !== "undefined" && CONFIG.OFFICE_ADDRESS) || "";
 const OFFICE_NAME = (typeof CONFIG !== "undefined" && CONFIG.OFFICE_NAME) || "the office";
 
-const state = { listings: [] };
+const state = { listings: [], cardSort: "commute" };
 
 const els = {
   confirmed: document.getElementById("confirmedResults"),
@@ -32,6 +32,7 @@ const els = {
   tableView: document.getElementById("tableView"),
   allListingsBody: document.getElementById("allListingsBody"),
   allListingsTable: document.getElementById("allListingsTable"),
+  cardSortSelect: document.getElementById("cardSortSelect"),
 };
 
 // ---------------------------------------------------------------- loading
@@ -277,11 +278,20 @@ function escapeAttr(str) {
   return escapeHtml(str).replace(/"/g, "&quot;");
 }
 
+function cardComparator() {
+  if (state.cardSort === "newest") {
+    return (a, b) => new Date(b.first_seen || 0) - new Date(a.first_seen || 0);
+  }
+  if (state.cardSort === "oldest") {
+    return (a, b) => new Date(a.first_seen || 0) - new Date(b.first_seen || 0);
+  }
+  // "commute" (default) — listings with unknown commute sort last, not first.
+  return (a, b) => (a.commute_minutes ?? Infinity) - (b.commute_minutes ?? Infinity);
+}
+
 function render() {
-  const confirmed = state.listings
-    .filter((l) => l.match_status === "confirmed")
-    .sort((a, b) => (a.commute_minutes ?? Infinity) - (b.commute_minutes ?? Infinity));
-  const needsVerification = state.listings.filter((l) => l.match_status === "needs_verification");
+  const confirmed = state.listings.filter((l) => l.match_status === "confirmed").sort(cardComparator());
+  const needsVerification = state.listings.filter((l) => l.match_status === "needs_verification").sort(cardComparator());
   const rejected = state.listings.filter((l) => l.match_status === "rejected");
 
   els.confirmed.innerHTML = "";
@@ -407,6 +417,13 @@ if (els.addListingBtn) {
   els.addListingForm.addEventListener("submit", async (e) => {
     const formData = new FormData(els.addListingForm);
     await addListingFromForm(formData, els.addListingForm);
+  });
+}
+
+if (els.cardSortSelect) {
+  els.cardSortSelect.addEventListener("change", () => {
+    state.cardSort = els.cardSortSelect.value;
+    render();
   });
 }
 
