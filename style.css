@@ -124,6 +124,7 @@ main {
   border-radius: 6px;
   padding: 8px 14px;
   font-size: 0.9rem;
+  min-height: 40px;
 }
 
 .results {
@@ -281,4 +282,67 @@ dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
   .status-badge.status-possibly_unavailable, .status-badge.status-not_recently_verified, .status-badge.status-needs_verification { background: #332a17; border-color: #4a3c22; }
   .status-badge.status-unavailable, .status-badge.status-rejected { background: #2e1e1c; border-color: #45302c; }
   #allListingsTable tbody tr:hover { background: rgba(255,255,255,0.03); }
+}
+
+/* ------------------------------------------------------- mobile layout */
+@media (max-width: 640px) {
+  header { padding: 18px 14px 10px; }
+  header h1 { font-size: 1.4rem; }
+  .subtitle { font-size: 0.85rem; }
+
+  main { padding: 12px 12px 48px; }
+
+  .requirements { padding: 14px 16px; }
+  .requirements ul { grid-template-columns: 1fr; gap: 4px; }
+
+  .results-header { flex-direction: column; align-items: stretch; }
+  .results-header h2 { text-align: center; }
+
+  .results-header-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .sort-control { justify-content: space-between; }
+  .sort-control select { flex: 1; min-height: 40px; }
+
+  .view-toggle { width: 100%; }
+  .view-toggle-btn { flex: 1; min-height: 40px; }
+
+  #addListingBtn { width: 100%; min-height: 44px; font-size: 1rem; }
+
+  .results { grid-template-columns: 1fr; gap: 12px; }
+
+  .card { padding: 14px; }
+  .card .rent { font-size: 1.1rem; }
+
+  .view-link { padding: 11px 12px; font-size: 0.9rem; }
+
+  .section-toggle { position: static; margin-bottom: 6px; display: inline-block; min-height: 36px; }
+  .section-heading { padding-right: 0; }
+
+  /* Table view: shrink text/padding so more columns fit before the
+     horizontal scroll kicks in, and make the scroll itself obviously
+     touch-scrollable rather than looking like a cut-off layout. */
+  #allListingsTable { font-size: 0.78rem; }
+  #allListingsTable th, #allListingsTable td { padding: 7px 8px; }
+  #allListingsTable .notes-input { width: 110px; }
+  .table-scroll { -webkit-overflow-scrolling: touch; }
+
+  /* Full-screen-feeling dialog on small screens instead of a small
+     centered card, so the form fields have room to breathe. */
+  dialog#addListingDialog {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+  }
+  #addListingForm { max-height: 100dvh; padding: 16px; }
+  #addListingForm input, #addListingForm select, #addListingForm textarea {
+    min-height: 40px;
+    font-size: 1rem; /* iOS/Android zoom-on-focus kicks in below 16px */
+  }
+
+  .dialog-actions button { min-height: 44px; flex: 1; }
 }
