@@ -220,7 +220,7 @@ button { font-family: inherit; }
 }
 .row-item:hover { filter: brightness(1.05); }
 .row-item:active { transform: scale(0.99); }
-.near-matches .row-item { opacity: 0.9; }
+.near-matches .row-wrap { opacity: 0.9; }
 
 .row-green { background: #4a7c62; }
 .row-amber { background: #a8763a; }

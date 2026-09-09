@@ -202,12 +202,9 @@ function renderExpandContent(listing) {
   if (kind === "confirmed") {
     parts.push(`<div class="owner-line">${listing.owner_status === "owner" ? "Owner-direct ✓" : "Owner/broker status UNKNOWN"}</div>`);
   }
-  if (kind === "needs_verification" && listing.unknown_fields && listing.unknown_fields.length) {
-    parts.push(`<div class="unknowns">Needs verification: ${listing.unknown_fields.map(escapeHtml).join(", ")}</div>`);
-  }
-  if (kind === "rejected" && listing.fail_reasons && listing.fail_reasons.length) {
-    parts.push(`<div class="fails">Fails: ${listing.fail_reasons.map(escapeHtml).join("; ")}</div>`);
-  }
+  // Needs-verification/rejected reasons already appear in the row's own
+  // subtitle line (rowSubtitle) right above this panel — repeating the
+  // identical text here would just be noise.
 
   parts.push(`
     <div class="meta">
