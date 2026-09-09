@@ -33,6 +33,9 @@ const els = {
   allListingsBody: document.getElementById("allListingsBody"),
   allListingsTable: document.getElementById("allListingsTable"),
   cardSortSelect: document.getElementById("cardSortSelect"),
+  detailDialog: document.getElementById("listingDetailDialog"),
+  detailContent: document.getElementById("listingDetailContent"),
+  closeDetail: document.getElementById("closeDetail"),
 };
 
 // ---------------------------------------------------------------- loading
@@ -90,93 +93,118 @@ function boolIcon(value) {
   return "UNKNOWN";
 }
 
-// Only ever renders a real image_url lifted from the source post/actor
+// Only ever styled with a real image_url lifted from the source post/actor
 // (see pipeline/sources/telegram_public.py, apify_generic.py) — never a
-// placeholder or stock photo. onerror removes it rather than showing a
-// broken-image icon, since a dead link isn't worth fabricating a stand-in for.
-function thumbnailHtml(listing) {
-  if (!listing.image_url) return "";
-  return `<img class="card-thumb" src="${escapeAttr(listing.image_url)}" alt="" loading="lazy" onerror="this.remove()">`;
+// placeholder or stock photo. Using a background-image div rather than an
+// <img> means a dead URL just quietly shows the muted background instead
+// of a broken-image icon — nothing to fabricate a stand-in for.
+function tileThumbHtml(listing) {
+  if (listing.image_url) {
+    return `<div class="tile-thumb" style="background-image:url('${escapeAttr(listing.image_url)}')"></div>`;
+  }
+  return `<div class="tile-thumb tile-thumb-empty"><span>🏠</span></div>`;
 }
 
-// Makes the whole card tappable through to the original listing — the
-// existing "View Original Listing" button still works as its own link (a
-// click there is left alone), this just extends the same navigation to
-// anywhere else on the card. No-op when there's no url to send it to.
-function attachCardClickthrough(card, listing) {
-  if (!listing.url) return;
-  card.classList.add("has-link");
-  card.addEventListener("click", (e) => {
-    if (e.target.closest("a")) return;
-    window.open(listing.url, "_blank", "noopener");
-  });
+function tileBadge(listing) {
+  if (listing.match_status === "rejected") {
+    const n = listing.fail_reasons.length;
+    return `<span class="status-badge status-rejected">${n} issue${n === 1 ? "" : "s"}</span>`;
+  }
+  if (listing.match_status === "needs_verification") {
+    return `<span class="status-badge status-needs_verification">Needs verification</span>`;
+  }
+  return statusBadge(listing);
 }
 
-function renderConfirmedCard(listing) {
-  const card = document.createElement("article");
-  card.className = "card confirmed";
-  card.innerHTML = `
-    ${thumbnailHtml(listing)}
+// Compact grid tile — just enough to scan a list at a glance. Tapping opens
+// the full detail dialog (openDetail) rather than navigating away, so
+// browsing many listings doesn't mean leaving the app on every tap.
+function renderTile(listing) {
+  const tile = document.createElement("article");
+  tile.className = "tile";
+  tile.innerHTML = `
+    ${tileThumbHtml(listing)}
+    <div class="tile-body">
+      <div class="tile-rent">${fmtMoney(listing.rent)}${listing.rent != null ? "/mo" : ""}</div>
+      <div class="tile-sub">${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</div>
+      <div class="tile-badges">${tileBadge(listing)}</div>
+    </div>
+  `;
+  tile.addEventListener("click", () => openDetail(listing));
+  return tile;
+}
+
+// Full detail content shown in the expanded dialog — everything the old
+// full-size cards used to show inline, now revealed on demand instead of
+// dominating the list. Adapts what it shows to match_status the same way
+// the three separate card renderers used to.
+function renderDetailContent(listing) {
+  const kind = listing.match_status;
+  const parts = [];
+
+  if (listing.image_url) {
+    parts.push(`<img class="detail-thumb" src="${escapeAttr(listing.image_url)}" alt="" onerror="this.remove()">`);
+  }
+
+  parts.push(`
     <div class="card-top">
-      <div class="rent">${fmtMoney(listing.rent)}/month</div>
-      ${statusBadge(listing)}
+      <div class="rent">${fmtMoney(listing.rent)}${listing.rent != null ? "/month" : ""}</div>
+      ${kind === "needs_verification"
+        ? '<span class="status-badge status-needs_verification">Needs verification</span>'
+        : kind === "rejected"
+        ? '<span class="status-badge status-rejected">Rejected</span>'
+        : statusBadge(listing)}
     </div>
     <div class="deposit">${fmtMoney(listing.deposit)} deposit</div>
-    <div class="tags">
-      <span class="tag">${listing.bhk ?? "?"} BHK</span>
-      <span class="tag">${furnishingLabel(listing.furnishing)}</span>
-      <span class="tag good">Lift ${boolIcon(listing.lift)}</span>
-      <span class="tag good">Brokerage ₹0 ✓</span>
-    </div>
-    <div class="location">📍 ${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</div>
-    <div class="commute">🚗 ${listing.commute_minutes != null ? Math.round(listing.commute_minutes) + " min" : "UNKNOWN"} to ${escapeHtml(OFFICE_NAME)}${listing.commute_source === "google_distance_matrix_traffic" ? " (traffic-aware)" : listing.commute_source === "osrm_driving" ? " (no live traffic)" : ""}</div>
-    <div class="owner-line">${listing.owner_status === "owner" ? "Owner-direct ✓" : "Owner/broker status UNKNOWN"}</div>
+  `);
+
+  if (kind === "confirmed") {
+    parts.push(`
+      <div class="tags">
+        <span class="tag">${listing.bhk ?? "?"} BHK</span>
+        <span class="tag">${furnishingLabel(listing.furnishing)}</span>
+        <span class="tag good">Lift ${boolIcon(listing.lift)}</span>
+        <span class="tag good">Brokerage ₹0 ✓</span>
+      </div>
+    `);
+  }
+
+  parts.push(`<div class="location">📍 ${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</div>`);
+  parts.push(`<div class="commute">🚗 ${listing.commute_minutes != null ? Math.round(listing.commute_minutes) + " min" : "UNKNOWN"} to ${escapeHtml(OFFICE_NAME)}${listing.commute_source === "google_distance_matrix_traffic" ? " (traffic-aware)" : listing.commute_source === "osrm_driving" ? " (no live traffic)" : ""}</div>`);
+
+  if (kind === "confirmed") {
+    parts.push(`<div class="owner-line">${listing.owner_status === "owner" ? "Owner-direct ✓" : "Owner/broker status UNKNOWN"}</div>`);
+  }
+  if (kind === "needs_verification" && listing.unknown_fields && listing.unknown_fields.length) {
+    parts.push(`<div class="unknowns">Needs verification: ${listing.unknown_fields.map(escapeHtml).join(", ")}</div>`);
+  }
+  if (kind === "rejected" && listing.fail_reasons && listing.fail_reasons.length) {
+    parts.push(`<div class="fails">Fails: ${listing.fail_reasons.map(escapeHtml).join("; ")}</div>`);
+  }
+
+  parts.push(`
     <div class="meta">
       ${timeAgo(listing.first_seen, listing)} · via ${escapeHtml(listing.source || "unknown source")}
       ${listing.merged_sources && listing.merged_sources.length > 1 ? `<br>Also seen on: ${listing.merged_sources.map((s) => escapeHtml(s.source)).join(", ")}` : ""}
     </div>
-    ${listing.score_reasons && listing.score_reasons.length ? `<div class="why">Ranked for: ${listing.score_reasons.map(escapeHtml).join(" · ")}</div>` : ""}
-    ${listing.url ? `<a class="view-link" href="${escapeAttr(listing.url)}" target="_blank" rel="noopener">View Original Listing</a>` : '<div class="view-link disabled">No source link available</div>'}
-  `;
-  attachCardClickthrough(card, listing);
-  return card;
+  `);
+  if (listing.score_reasons && listing.score_reasons.length) {
+    parts.push(`<div class="why">Ranked for: ${listing.score_reasons.map(escapeHtml).join(" · ")}</div>`);
+  }
+  parts.push(listing.url
+    ? `<a class="view-link" href="${escapeAttr(listing.url)}" target="_blank" rel="noopener">View Original Listing</a>`
+    : '<div class="view-link disabled">No source link available</div>');
+
+  return parts.join("");
 }
 
-function renderNeedsVerificationCard(listing) {
-  const card = document.createElement("article");
-  card.className = "card needs-verification";
-  card.innerHTML = `
-    ${thumbnailHtml(listing)}
-    <div class="card-top">
-      <div class="rent">${fmtMoney(listing.rent)}/month</div>
-      ${statusBadge(listing)}
-    </div>
-    <div class="deposit">${fmtMoney(listing.deposit)} deposit</div>
-    <div class="unknowns">Needs verification: ${listing.unknown_fields.map(escapeHtml).join(", ")}</div>
-    <div class="location">📍 ${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</div>
-    <div class="commute">🚗 ${listing.commute_minutes != null ? Math.round(listing.commute_minutes) + " min" : "UNKNOWN"} to ${escapeHtml(OFFICE_NAME)}</div>
-    <div class="meta">${timeAgo(listing.first_seen, listing)} · via ${escapeHtml(listing.source || "unknown source")}</div>
-    ${listing.url ? `<a class="view-link" href="${escapeAttr(listing.url)}" target="_blank" rel="noopener">View Original Listing</a>` : '<div class="view-link disabled">No source link available</div>'}
-  `;
-  attachCardClickthrough(card, listing);
-  return card;
+function openDetail(listing) {
+  els.detailContent.innerHTML = renderDetailContent(listing);
+  els.detailDialog.showModal();
 }
 
-function renderNearMatchCard(listing) {
-  const card = document.createElement("article");
-  card.className = "card near-match";
-  card.innerHTML = `
-    ${thumbnailHtml(listing)}
-    <div class="card-top">
-      <div class="rent">${fmtMoney(listing.rent)}/month</div>
-    </div>
-    <div class="fails">Fails: ${listing.fail_reasons.map(escapeHtml).join("; ")}</div>
-    <div class="location">📍 ${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</div>
-    <div class="meta">via ${escapeHtml(listing.source || "unknown source")}</div>
-    ${listing.url ? `<a class="view-link" href="${escapeAttr(listing.url)}" target="_blank" rel="noopener">View Original Listing</a>` : '<div class="view-link disabled">No source link available</div>'}
-  `;
-  attachCardClickthrough(card, listing);
-  return card;
+if (els.closeDetail) {
+  els.closeDetail.addEventListener("click", () => els.detailDialog.close());
 }
 
 // ------------------------------------------------------ all listings table
@@ -333,11 +361,11 @@ function render() {
   const rejected = state.listings.filter((l) => l.match_status === "rejected");
 
   els.confirmed.innerHTML = "";
-  confirmed.forEach((l) => els.confirmed.appendChild(renderConfirmedCard(l)));
+  confirmed.forEach((l) => els.confirmed.appendChild(renderTile(l)));
   els.confirmedCount.textContent = `${confirmed.length} confirmed match${confirmed.length === 1 ? "" : "es"}`;
 
   els.needsVerification.innerHTML = "";
-  needsVerification.forEach((l) => els.needsVerification.appendChild(renderNeedsVerificationCard(l)));
+  needsVerification.forEach((l) => els.needsVerification.appendChild(renderTile(l)));
   els.needsVerificationCount.textContent = `${needsVerification.length} listing${needsVerification.length === 1 ? "" : "s"} needing verification`;
   els.needsVerificationToggle.parentElement.hidden = needsVerification.length === 0;
 
@@ -346,7 +374,7 @@ function render() {
     .slice()
     .sort((a, b) => a.fail_reasons.length - b.fail_reasons.length)
     .slice(0, 20)
-    .forEach((l) => els.nearMatches.appendChild(renderNearMatchCard(l)));
+    .forEach((l) => els.nearMatches.appendChild(renderTile(l)));
   els.nearMatchesSection.hidden = rejected.length === 0;
 
   els.emptyState.hidden = confirmed.length !== 0;

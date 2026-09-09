@@ -156,41 +156,89 @@ button { font-family: inherit; }
 
 .results {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
 }
 
-.card {
+/* ------------------------------------------------------------- tiles */
+/* Compact grid cell — a glance's worth of info. Tap opens the full
+   detail dialog (#listingDetailDialog) instead of navigating away, so
+   the list stays scannable without every listing eating the screen. */
+.tile {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
-  padding: 16px;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  overflow: hidden; /* keeps the thumbnail's bled edges inside the rounded corners */
+  cursor: pointer;
   transition: box-shadow 0.15s, border-color 0.15s;
 }
-.card.has-link { cursor: pointer; }
-.card.has-link:hover { border-color: #d4d4d8; box-shadow: 0 2px 8px 0 rgb(0 0 0 / 0.06); }
-.near-matches .card { opacity: 0.85; }
+.tile:hover { border-color: #d4d4d8; box-shadow: 0 2px 8px 0 rgb(0 0 0 / 0.06); }
+.near-matches .tile { opacity: 0.85; }
 
-.card-thumb {
-  width: calc(100% + 32px);
-  margin: -16px -16px 2px;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-  background: var(--muted-bg);
+.tile-thumb {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background-color: var(--muted-bg);
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+.tile-thumb-empty span { font-size: 1.6rem; opacity: 0.3; }
+
+.tile-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 3px; }
+.tile-rent { font-size: 0.88rem; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+.tile-sub {
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tile-badges { margin-top: 1px; }
+.tile-badges .status-badge { font-size: 0.62rem; padding: 1px 7px; }
+
+/* -------------------------------------------------- detail dialog --- */
+/* Everything a tile doesn't show — opened by tapping a tile. Reuses the
+   same content classes (.card-top, .rent, .tags, .location, etc.) the
+   old full-size cards used, just rendered into this dialog instead of
+   inline in the grid. */
+dialog.detail-dialog {
+  border: none;
+  border-radius: var(--radius);
+  padding: 0;
+  width: min(480px, 92vw);
+  max-height: 90vh;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 0.15);
+}
+dialog.detail-dialog::backdrop { background: rgba(0,0,0,0.4); }
+
+.detail-header { position: sticky; top: 0; display: flex; justify-content: flex-end; padding: 10px 10px 0; background: var(--surface); z-index: 1; }
+.detail-close {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 999px;
+  width: 30px;
+  height: 30px;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+.detail-content { display: flex; flex-direction: column; gap: 8px; padding: 4px 20px 20px; overflow-y: auto; }
+.detail-thumb { width: calc(100% + 40px); margin: -4px -20px 4px; aspect-ratio: 16 / 9; object-fit: cover; background: var(--muted-bg); }
 
 .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-.card .rent { font-size: 1.1rem; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
-.card .deposit { font-size: 0.82rem; color: var(--muted); margin-top: -4px; }
+.rent { font-size: 1.15rem; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+.deposit { font-size: 0.85rem; color: var(--muted); margin-top: -4px; }
 
 .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0; }
 .tag {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 500;
   padding: 3px 9px;
   border-radius: 999px;
@@ -200,13 +248,13 @@ button { font-family: inherit; }
 }
 .tag.good { background: var(--accent-muted-bg); color: var(--accent-muted-fg); border-color: transparent; }
 
-.location, .commute, .owner-line { font-size: 0.85rem; color: var(--text); }
+.location, .commute, .owner-line { font-size: 0.88rem; color: var(--text); }
 .owner-line { color: var(--muted); }
-.unknowns { font-size: 0.8rem; color: var(--warn-muted-fg); }
-.fails { font-size: 0.8rem; color: var(--danger-muted-fg); }
-.why { font-size: 0.76rem; color: var(--muted); }
+.unknowns { font-size: 0.82rem; color: var(--warn-muted-fg); }
+.fails { font-size: 0.82rem; color: var(--danger-muted-fg); }
+.why { font-size: 0.78rem; color: var(--muted); }
 
-.card .meta { font-size: 0.76rem; color: var(--muted); margin-top: 2px; padding-top: 8px; border-top: 1px solid var(--border); }
+.meta { font-size: 0.78rem; color: var(--muted); margin-top: 2px; padding-top: 8px; border-top: 1px solid var(--border); }
 
 .status-badge {
   font-size: 0.7rem;
@@ -338,7 +386,7 @@ dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
     --warn-muted-fg: #eab308;
   }
   .view-link:hover { background: var(--muted-bg); border-color: #3f3f46; }
-  .card.has-link:hover { border-color: #3f3f46; box-shadow: 0 2px 8px 0 rgb(0 0 0 / 0.3); }
+  .tile:hover { border-color: #3f3f46; box-shadow: 0 2px 8px 0 rgb(0 0 0 / 0.3); }
 }
 
 /* ------------------------------------------------------- mobile layout */
@@ -367,10 +415,16 @@ dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
 
   #addListingBtn { width: 100%; min-height: 44px; font-size: 0.95rem; }
 
-  .results { grid-template-columns: 1fr; gap: 12px; }
+  /* Tiles stay multi-column even on small phones (2-3 across) — that's
+     the whole point of the compact grid, so it must not collapse to
+     one giant tile per row here. */
+  .results { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
 
-  .card { padding: 14px; }
-  .card-thumb { width: calc(100% + 28px); margin: -14px -14px 2px; }
+  .tile-rent { font-size: 0.82rem; }
+  .tile-sub { font-size: 0.66rem; }
+
+  .detail-content { padding: 4px 16px 20px; }
+  .detail-thumb { width: calc(100% + 32px); margin: -4px -16px 4px; }
 
   .view-link { padding: 11px 12px; font-size: 0.88rem; }
 
@@ -387,7 +441,7 @@ dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
 
   /* Full-screen-feeling dialog on small screens instead of a small
      centered card, so the form fields have room to breathe. */
-  dialog#addListingDialog {
+  dialog#addListingDialog, dialog.detail-dialog {
     width: 100vw;
     max-width: 100vw;
     height: 100dvh;
@@ -396,6 +450,7 @@ dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
     border-radius: 0;
   }
   #addListingForm { max-height: 100dvh; padding: 16px; }
+  .detail-content { max-height: calc(100dvh - 44px); }
   #addListingForm input, #addListingForm select, #addListingForm textarea {
     min-height: 40px;
     font-size: 1rem; /* iOS/Android zoom-on-focus kicks in below 16px */
