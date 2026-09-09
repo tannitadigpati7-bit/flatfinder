@@ -13,7 +13,7 @@
 
 (function (root) {
   const NOMINATIM_CACHE_KEY = "flatfinder.geocodeCache";
-  const OFFICE_CACHE_KEY = "flatfinder.officeCoords";
+  const COMMUTE_CACHE_KEY = "flatfinder.commuteCache";
 
   function loadCache(key) {
     try {
@@ -55,27 +55,35 @@
     return result;
   }
 
+  // Just geocode() under a clearer name for call sites geocoding "the
+  // office" specifically — geocode()'s own cache is already keyed by the
+  // address text, so two different office addresses (e.g. two visitors
+  // with different personal profiles, see profile.js) each get their own
+  // correctly cached coordinates rather than sharing one slot.
   async function geocodeOffice(officeAddress) {
-    const cached = loadCache(OFFICE_CACHE_KEY);
-    if (cached && cached.lat) return cached;
-    const result = await geocode(officeAddress);
-    if (result) saveCache(OFFICE_CACHE_KEY, result);
-    return result;
+    return geocode(officeAddress);
   }
 
   async function commuteMinutes(origin, dest) {
     if (!origin || !dest) return { minutes: null, source: null };
+    const cache = loadCache(COMMUTE_CACHE_KEY);
+    const key = `${origin.lat.toFixed(5)},${origin.lng.toFixed(5)}->${dest.lat.toFixed(5)},${dest.lng.toFixed(5)}`;
+    if (key in cache) return cache[key];
+
     const coords = `${origin.lng},${origin.lat};${dest.lng},${dest.lat}`;
+    let result = { minutes: null, source: null };
     try {
       const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=false`);
       const data = await res.json();
       if (data.code === "Ok" && data.routes && data.routes.length) {
-        return { minutes: data.routes[0].duration / 60, source: "osrm_driving" };
+        result = { minutes: data.routes[0].duration / 60, source: "osrm_driving" };
       }
     } catch {
-      // fall through to unknown
+      return { minutes: null, source: null }; // network failure -> unknown, not cached, retry later
     }
-    return { minutes: null, source: null };
+    cache[key] = result;
+    saveCache(COMMUTE_CACHE_KEY, cache);
+    return result;
   }
 
   root.FlatFinderGeo = { geocode, geocodeOffice, commuteMinutes };

@@ -1,15 +1,25 @@
-// FlatFinder — personal rental search for a fixed set of requirements
-// (see config.js). Reads listings the pipeline (pipeline/run.py, scheduled
-// via GitHub Actions) has already discovered, extracted, geocoded, routed,
-// and hard-filtered, and renders them into Confirmed Matches / Needs
-// Verification / Near Matches. Nothing here invents or loosens a match —
-// match_status on each stored listing is authoritative.
+// FlatFinder — personal rental search. Requirements/office are driven by
+// a per-browser profile (profile.js) — config.js only supplies the
+// defaults a first-time sign-up form is pre-filled with. Reads listings
+// the pipeline (pipeline/run.py, scheduled via GitHub Actions) has already
+// discovered, extracted, geocoded, routed, and hard-filtered against the
+// deployment owner's own default profile; a visitor with a *different*
+// profile gets those decisions recomputed client-side against their own
+// criteria (see recomputeForProfile) rather than just relabeling the
+// owner's results.
 
-const REQ = (typeof CONFIG !== "undefined" && CONFIG.REQUIREMENTS) || {};
-const OFFICE_ADDRESS = (typeof CONFIG !== "undefined" && CONFIG.OFFICE_ADDRESS) || "";
-const OFFICE_NAME = (typeof CONFIG !== "undefined" && CONFIG.OFFICE_NAME) || "the office";
+let REQ = {};
+let OFFICE_ADDRESS = "";
+let OFFICE_NAME = "the office";
 
-const state = { listings: [], cardSort: "commute" };
+function applyProfile(profile) {
+  REQ = profile.requirements;
+  OFFICE_ADDRESS = profile.officeAddress;
+  OFFICE_NAME = profile.officeName || "the office";
+  officeCoordsPromise = null; // office address may have just changed — stop reusing the old one's cached coords
+}
+
+const state = { listings: [], cardSort: "commute", expandedId: null };
 
 const els = {
   confirmed: document.getElementById("confirmedResults"),
@@ -36,13 +46,57 @@ const els = {
   detailDialog: document.getElementById("listingDetailDialog"),
   detailContent: document.getElementById("listingDetailContent"),
   closeDetail: document.getElementById("closeDetail"),
+  settingsBtn: document.getElementById("settingsBtn"),
+  editRequirements: document.getElementById("editRequirements"),
+  requirementsList: document.getElementById("requirementsList"),
+  onboarding: document.getElementById("onboarding"),
+  onboardStep1: document.getElementById("onboardStep1"),
+  onboardStep2: document.getElementById("onboardStep2"),
+  onboardForm: document.getElementById("onboardForm"),
+  onboardContinue: document.getElementById("onboardContinue"),
 };
 
 // ---------------------------------------------------------------- loading
 
 async function loadListings() {
+  els.confirmedCount.textContent = "Loading…";
   state.listings = await window.FlatFinderSupabase.fetchListings();
+
+  const profile = window.FlatFinderProfile.getProfile();
+  if (!window.FlatFinderProfile.isDefaultProfile(profile)) {
+    els.confirmedCount.textContent = "Checking listings against your criteria…";
+    await recomputeForProfile(profile);
+  }
+
   render();
+}
+
+// Recomputes match_status/commute_minutes/fail_reasons/unknown_fields for
+// every listing against a profile that differs from this deployment's own
+// defaults — using each listing's already-extracted raw fields (rent,
+// bhk, lat/lng, etc.) and the exact same filter-client.js logic the
+// pipeline itself uses, never a guess. Only ever changes the in-memory
+// copies rendered this session; nothing is written back to Supabase, so
+// the shared database stays the pipeline's own authoritative record.
+async function recomputeForProfile(profile) {
+  const officeCoords = await window.FlatFinderGeo.geocodeOffice(profile.officeAddress);
+  const CONCURRENCY = 4;
+  let i = 0;
+  async function worker() {
+    while (i < state.listings.length) {
+      const listing = state.listings[i++];
+      if (listing.lat != null && listing.lng != null && officeCoords) {
+        const result = await window.FlatFinderGeo.commuteMinutes({ lat: listing.lat, lng: listing.lng }, officeCoords);
+        listing.commute_minutes = result.minutes;
+        listing.commute_source = result.source;
+      } else {
+        listing.commute_minutes = null;
+        listing.commute_source = null;
+      }
+      window.FlatFinderFilter.applyHardFilter(listing, profile.requirements);
+    }
+  }
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 }
 
 // --------------------------------------------------------------- rendering
@@ -118,14 +172,72 @@ function rowSubtitle(listing) {
   return `via ${listing.source || "unknown source"} · ${timeAgo(listing.first_seen, listing) || "UNKNOWN"}`;
 }
 
+// Leaner than renderDetailContent (no dialog fallback needs) — the row
+// header above already shows rent/location, so this only adds what the
+// header didn't: deposit, tags, commute, owner/verification status, meta,
+// and the "View Original Listing" link (the explicit alternative to the
+// implicit "tap the expanded row again" shortcut).
+function renderExpandContent(listing) {
+  const kind = listing.match_status;
+  const parts = [];
+
+  if (listing.image_url) {
+    parts.push(`<img class="detail-thumb" src="${escapeAttr(listing.image_url)}" alt="" onerror="this.remove()">`);
+  }
+  parts.push(`<div class="deposit">${fmtMoney(listing.deposit)} deposit</div>`);
+
+  if (kind === "confirmed") {
+    parts.push(`
+      <div class="tags">
+        <span class="tag">${listing.bhk ?? "?"} BHK</span>
+        <span class="tag">${furnishingLabel(listing.furnishing)}</span>
+        <span class="tag good">Lift ${boolIcon(listing.lift)}</span>
+        <span class="tag good">Brokerage ₹0 ✓</span>
+      </div>
+    `);
+  }
+
+  parts.push(`<div class="commute">🚗 ${listing.commute_minutes != null ? Math.round(listing.commute_minutes) + " min" : "UNKNOWN"} to ${escapeHtml(OFFICE_NAME)}${listing.commute_source === "google_distance_matrix_traffic" ? " (traffic-aware)" : listing.commute_source === "osrm_driving" ? " (no live traffic)" : ""}</div>`);
+
+  if (kind === "confirmed") {
+    parts.push(`<div class="owner-line">${listing.owner_status === "owner" ? "Owner-direct ✓" : "Owner/broker status UNKNOWN"}</div>`);
+  }
+  if (kind === "needs_verification" && listing.unknown_fields && listing.unknown_fields.length) {
+    parts.push(`<div class="unknowns">Needs verification: ${listing.unknown_fields.map(escapeHtml).join(", ")}</div>`);
+  }
+  if (kind === "rejected" && listing.fail_reasons && listing.fail_reasons.length) {
+    parts.push(`<div class="fails">Fails: ${listing.fail_reasons.map(escapeHtml).join("; ")}</div>`);
+  }
+
+  parts.push(`
+    <div class="meta">
+      ${timeAgo(listing.first_seen, listing)} · via ${escapeHtml(listing.source || "unknown source")}
+      ${listing.merged_sources && listing.merged_sources.length > 1 ? `<br>Also seen on: ${listing.merged_sources.map((s) => escapeHtml(s.source)).join(", ")}` : ""}
+    </div>
+  `);
+  if (listing.score_reasons && listing.score_reasons.length) {
+    parts.push(`<div class="why">Ranked for: ${listing.score_reasons.map(escapeHtml).join(" · ")}</div>`);
+  }
+  parts.push(listing.url
+    ? `<a class="view-link" href="${escapeAttr(listing.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">View Original Listing</a>`
+    : '<div class="view-link disabled">No source link available</div>');
+
+  return parts.join("");
+}
+
 // Full-width stacked row, colored by rent/brokerage (see rowColorClass).
-// Tapping goes straight to the source listing when there is one; when
-// there isn't (rare — see README), it falls back to the in-app detail
-// dialog instead of being a dead tap, since there's nowhere else to send
-// the click.
+// First tap expands the row in place — the expansion is the same color,
+// just taller, so it reads as one continuous block unfolding rather than
+// a popup — showing everything a click doesn't. Tapping the already-
+// expanded row (or the "View Original Listing" link inside it) goes to
+// the source. Only one row stays expanded at a time.
 function renderRow(listing) {
+  const wrap = document.createElement("div");
+  wrap.className = "row-wrap";
+
+  const color = rowColorClass(listing);
   const row = document.createElement("article");
-  row.className = `row-item ${rowColorClass(listing)}`;
+  row.className = `row-item ${color}`;
   row.innerHTML = `
     <div class="row-icon">${listing.bhk != null ? escapeHtml(String(listing.bhk)) : "🏠"}</div>
     <div class="row-text">
@@ -134,11 +246,32 @@ function renderRow(listing) {
     </div>
     <div class="row-amount">${fmtMoney(listing.rent)}${listing.rent != null ? "<span>/mo</span>" : ""}</div>
   `;
+
+  const expandPanel = document.createElement("div");
+  expandPanel.className = `row-expand ${color}`;
+  expandPanel.hidden = true;
+
   row.addEventListener("click", () => {
-    if (listing.url) window.open(listing.url, "_blank", "noopener");
-    else openDetail(listing);
+    if (!expandPanel.hidden) {
+      if (listing.url) window.open(listing.url, "_blank", "noopener");
+      return;
+    }
+    document.querySelectorAll(".row-wrap .row-item.row-item-open").forEach((el) => {
+      el.classList.remove("row-item-open");
+      el.nextElementSibling.hidden = true;
+    });
+    row.classList.add("row-item-open");
+    expandPanel.hidden = false;
+    if (!expandPanel.dataset.built) {
+      expandPanel.innerHTML = renderExpandContent(listing);
+      expandPanel.dataset.built = "1";
+    }
+    row.scrollIntoView({ behavior: "smooth", block: "nearest" });
   });
-  return row;
+
+  wrap.appendChild(row);
+  wrap.appendChild(expandPanel);
+  return wrap;
 }
 
 // Full detail content shown in the expanded dialog — everything the old
@@ -508,4 +641,122 @@ if (els.needsVerificationToggle) {
   });
 }
 
-loadListings();
+// -------------------------------------------------------- requirements list
+
+function renderRequirementsList() {
+  if (!els.requirementsList) return;
+  const bhkLabel = REQ.bhk != null ? `${REQ.bhk} BHK` : "Any BHK";
+  const items = [
+    bhkLabel,
+    REQ.furnishing ? furnishingLabel(REQ.furnishing) : "Any furnishing",
+    REQ.maxRent != null ? `Rent ≤ ₹${Number(REQ.maxRent).toLocaleString("en-IN")}/month` : "No rent limit",
+    REQ.maxDeposit != null ? `Deposit ≤ ₹${Number(REQ.maxDeposit).toLocaleString("en-IN")}` : "No deposit limit",
+    REQ.lift === false ? "Lift not required" : "Lift mandatory",
+    REQ.brokerageZero === false ? "Brokerage not restricted" : "Brokerage ₹0 (owner-direct preferred)",
+    `≤ ${REQ.maxCommuteMinutes ?? "?"} min commute to ${OFFICE_NAME || "your destination"}`,
+  ];
+  els.requirementsList.innerHTML = items.map((t) => `<li>${escapeHtml(t)}</li>`).join("");
+}
+
+// -------------------------------------------------------------- onboarding
+
+function fillOnboardForm(profile) {
+  const form = els.onboardForm;
+  form.elements.name.value = profile.name || "";
+  form.elements.officeName.value = profile.officeName || "";
+  form.elements.officeAddress.value = profile.officeAddress || "";
+  const r = profile.requirements;
+  form.elements.bhk.value = r.bhk ?? "";
+  form.elements.furnishing.value = r.furnishing || "semi";
+  form.elements.maxRent.value = r.maxRent ?? "";
+  form.elements.maxDeposit.value = r.maxDeposit ?? "";
+  form.elements.maxCommuteMinutes.value = r.maxCommuteMinutes ?? "";
+  form.elements.lift.checked = r.lift !== false;
+  form.elements.brokerageZero.checked = r.brokerageZero !== false;
+}
+
+function readOnboardForm() {
+  const form = els.onboardForm;
+  const fd = new FormData(form);
+  return {
+    name: (fd.get("name") || "").trim(),
+    officeName: (fd.get("officeName") || "").trim(),
+    officeAddress: (fd.get("officeAddress") || "").trim(),
+    requirements: {
+      bhk: fd.get("bhk") ? parseFloat(fd.get("bhk")) : null,
+      furnishing: fd.get("furnishing") || null,
+      maxRent: fd.get("maxRent") ? parseFloat(fd.get("maxRent")) : null,
+      maxDeposit: fd.get("maxDeposit") ? parseFloat(fd.get("maxDeposit")) : null,
+      lift: form.elements.lift.checked,
+      brokerageZero: form.elements.brokerageZero.checked,
+      maxCommuteMinutes: fd.get("maxCommuteMinutes") ? parseFloat(fd.get("maxCommuteMinutes")) : null,
+    },
+  };
+}
+
+// skipExplainer: true when re-editing an existing profile from the
+// settings button — the "how this works" screen only makes sense once,
+// on a genuinely first visit.
+function showOnboarding(profile, { skipExplainer } = {}) {
+  fillOnboardForm(profile);
+  els.onboarding.hidden = false;
+  els.onboardStep1.hidden = false;
+  els.onboardStep2.hidden = true;
+  els.onboarding.dataset.skipExplainer = skipExplainer ? "1" : "";
+}
+
+function hideOnboarding() {
+  els.onboarding.hidden = true;
+}
+
+if (els.onboardForm) {
+  els.onboardForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const profile = readOnboardForm();
+    window.FlatFinderProfile.saveProfile(profile);
+    applyProfile(profile);
+    renderRequirementsList();
+    if (els.onboarding.dataset.skipExplainer) {
+      hideOnboarding();
+      loadListings();
+    } else {
+      els.onboardStep1.hidden = true;
+      els.onboardStep2.hidden = false;
+    }
+  });
+}
+
+if (els.onboardContinue) {
+  els.onboardContinue.addEventListener("click", () => {
+    hideOnboarding();
+    loadListings();
+  });
+}
+
+if (els.settingsBtn) {
+  els.settingsBtn.addEventListener("click", () => {
+    const profile = window.FlatFinderProfile.getProfile() || window.FlatFinderProfile.defaultProfile();
+    showOnboarding(profile, { skipExplainer: true });
+  });
+}
+if (els.editRequirements) {
+  els.editRequirements.addEventListener("click", () => {
+    const profile = window.FlatFinderProfile.getProfile() || window.FlatFinderProfile.defaultProfile();
+    showOnboarding(profile, { skipExplainer: true });
+  });
+}
+
+// ------------------------------------------------------------------- init
+
+function init() {
+  const existing = window.FlatFinderProfile.getProfile();
+  if (existing) {
+    applyProfile(existing);
+    renderRequirementsList();
+    loadListings();
+  } else {
+    showOnboarding(window.FlatFinderProfile.defaultProfile(), { skipExplainer: false });
+  }
+}
+
+init();

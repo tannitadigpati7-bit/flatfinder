@@ -31,12 +31,40 @@ body {
 }
 
 header {
+  position: relative;
   padding: 28px 20px 14px;
   text-align: center;
 }
 
 header h1 { margin: 0 0 4px; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; }
 .subtitle { margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+.settings-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 999px;
+  width: 34px;
+  height: 34px;
+  font-size: 1rem;
+}
+
+.requirements-edit {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 2px 9px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  margin-left: 6px;
+  vertical-align: middle;
+}
 
 main {
   max-width: 900px;
@@ -165,7 +193,10 @@ button { font-family: inherit; }
    in app.js) — the color itself is a hard-requirement signal, not
    decoration: green = rent within budget, amber = rent unknown, red =
    rent over budget, blue = a broker is involved (hard fail regardless
-   of rent). Tap goes straight to the source listing. */
+   of rent). First tap expands in place (row-expand below); tapping the
+   expanded row again, or the link inside it, opens the source listing. */
+.row-wrap { display: flex; flex-direction: column; }
+
 .row-item {
   display: flex;
   align-items: center;
@@ -223,6 +254,37 @@ button { font-family: inherit; }
   text-align: right;
 }
 .row-amount span { display: block; font-size: 0.62rem; font-weight: 500; opacity: 0.75; }
+
+.row-item.row-item-open { border-radius: 18px 18px 0 0; }
+
+/* Same color as the row above it, seamlessly joined — reads as one block
+   unfolding rather than a popup. Text/borders here are light-on-dark
+   overrides of the shared .tag/.meta/.view-link/etc classes (which
+   default to dark-on-light for the detail dialog fallback). */
+.row-expand {
+  padding: 4px 16px 16px 68px;
+  border-radius: 0 0 18px 18px;
+  color: #ffffff;
+  cursor: default;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.row-expand .detail-thumb { width: calc(100% + 20px); margin: 0 -10px 4px -58px; border-radius: 10px; }
+.row-expand .deposit, .row-expand .commute, .row-expand .owner-line,
+.row-expand .unknowns, .row-expand .fails, .row-expand .why, .row-expand .meta {
+  color: rgba(255, 255, 255, 0.88);
+}
+.row-expand .tag { color: #ffffff; border-color: rgba(255, 255, 255, 0.35); }
+.row-expand .tag.good { background: rgba(255, 255, 255, 0.18); color: #ffffff; }
+.row-expand .meta { border-top-color: rgba(255, 255, 255, 0.25); }
+.row-expand .view-link {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}
+.row-expand .view-link:hover { background: rgba(255, 255, 255, 0.26); }
+.row-expand .view-link.disabled { border-style: dashed; color: rgba(255, 255, 255, 0.65); }
 
 /* -------------------------------------------------- detail dialog --- */
 /* Everything a tile doesn't show — opened by tapping a tile. Reuses the
@@ -331,6 +393,81 @@ dialog.detail-dialog::backdrop { background: rgba(0,0,0,0.4); }
   padding: 4px 10px;
   font-size: 0.78rem;
   color: var(--text);
+}
+
+/* ------------------------------------------------------------ onboarding */
+/* First-run sign-up (or re-opened later via the settings/edit buttons) —
+   a full-screen overlay, not a dialog, so it works the same on browsers
+   with partial <dialog> support and reliably covers the whole viewport
+   on mobile. */
+.onboarding {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  overflow-y: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 32px 16px;
+}
+.onboard-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 24px;
+}
+.onboard-title { font-size: 1.3rem; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+#onboardForm { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+#onboardForm label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+#onboardForm input, #onboardForm select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.92rem;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+}
+#onboardForm input:focus, #onboardForm select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.onboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.checkbox-label { flex-direction: row !important; align-items: center; gap: 8px !important; font-size: 0.85rem !important; color: var(--text) !important; }
+.checkbox-label input { width: auto; }
+.onboard-continue {
+  margin-top: 6px;
+  cursor: pointer;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-radius: var(--radius-sm);
+  padding: 11px 16px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  width: 100%;
+}
+
+.onboard-explainer { text-align: center; }
+.onboard-explainer h2 { font-size: 1.15rem; margin: 6px 0; }
+.onboard-explainer p { font-size: 0.88rem; color: var(--muted); line-height: 1.5; margin: 8px 0 16px; }
+.onboard-icon { font-size: 2.2rem; }
+.onboard-swatches { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 16px; }
+.onboard-swatch {
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-align: left;
 }
 
 dialog#addListingDialog {
@@ -442,6 +579,15 @@ dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
   .row-icon { width: 34px; height: 34px; font-size: 0.85rem; }
   .row-title { font-size: 0.86rem; }
   .row-sub { font-size: 0.7rem; }
+  .row-item.row-item-open { border-radius: 16px 16px 0 0; }
+  .row-expand { padding: 4px 14px 14px 58px; border-radius: 0 0 16px 16px; }
+  .row-expand .detail-thumb { margin-left: -44px; }
+
+  .onboarding { padding: 20px 12px; align-items: stretch; }
+  .onboard-card { padding: 18px; max-width: none; }
+  .onboard-title { font-size: 1.15rem; }
+  .onboard-grid { grid-template-columns: 1fr; }
+  #onboardForm input, #onboardForm select { min-height: 40px; font-size: 1rem; }
   .row-amount { font-size: 0.86rem; }
 
   .detail-content { padding: 4px 16px 20px; }
