@@ -194,7 +194,7 @@ button { font-family: inherit; }
 .results {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 4px;
 }
 
 /* --------------------------------------------------------- row items */
@@ -202,7 +202,9 @@ button { font-family: inherit; }
    in app.js) — the color itself is a hard-requirement signal, not
    decoration: green = rent within budget, amber = rent unknown, red =
    rent over budget, blue = a broker is involved (hard fail regardless
-   of rent). First tap expands in place (row-expand below); tapping the
+   of rent). Packed tight (4px gap, flat — no drop shadow) so the list
+   reads as one stacked block of cards, not separated tiles floating on
+   the page. First tap expands in place (row-expand below); tapping the
    expanded row again, or the link inside it, opens the source listing. */
 .row-wrap { display: flex; flex-direction: column; }
 
@@ -210,32 +212,31 @@ button { font-family: inherit; }
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 16px;
-  border-radius: 18px;
+  padding: 16px 18px;
+  border-radius: 20px;
   cursor: pointer;
   color: #ffffff;
-  transition: transform 0.1s, box-shadow 0.15s;
-  box-shadow: var(--shadow-sm);
+  transition: transform 0.1s, filter 0.15s;
 }
-.row-item:hover { box-shadow: 0 4px 14px 0 rgb(0 0 0 / 0.12); }
+.row-item:hover { filter: brightness(1.05); }
 .row-item:active { transform: scale(0.99); }
 .near-matches .row-item { opacity: 0.9; }
 
-.row-green { background: #1f7a4d; }
-.row-amber { background: #b45309; }
-.row-red   { background: #b91c1c; }
-.row-blue  { background: #1e3a8a; }
+.row-green { background: #4a7c62; }
+.row-amber { background: #a8763a; }
+.row-red   { background: #a14b45; }
+.row-blue  { background: #3d5a80; }
 
 .row-icon {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.18);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 700;
 }
 
@@ -264,15 +265,15 @@ button { font-family: inherit; }
 }
 .row-amount span { display: block; font-size: 0.62rem; font-weight: 500; opacity: 0.75; }
 
-.row-item.row-item-open { border-radius: 18px 18px 0 0; }
+.row-item.row-item-open { border-radius: 20px 20px 0 0; }
 
 /* Same color as the row above it, seamlessly joined — reads as one block
    unfolding rather than a popup. Text/borders here are light-on-dark
    overrides of the shared .tag/.meta/.view-link/etc classes (which
    default to dark-on-light for the detail dialog fallback). */
 .row-expand {
-  padding: 4px 16px 16px 68px;
-  border-radius: 0 0 18px 18px;
+  padding: 4px 18px 18px 68px;
+  border-radius: 0 0 20px 20px;
   color: #ffffff;
   cursor: default;
   display: flex;
@@ -554,7 +555,6 @@ dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
     --warn-muted-fg: #eab308;
   }
   .view-link:hover { background: var(--muted-bg); border-color: #3f3f46; }
-  .row-item:hover { box-shadow: 0 4px 14px 0 rgb(0 0 0 / 0.4); }
 }
 
 /* ------------------------------------------------------- mobile layout */
@@ -583,13 +583,13 @@ dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
 
   #addListingBtn { width: 100%; min-height: 44px; font-size: 0.95rem; }
 
-  .results { gap: 8px; }
-  .row-item { padding: 12px 14px; border-radius: 16px; gap: 10px; }
+  .results { gap: 3px; }
+  .row-item { padding: 14px 16px; border-radius: 18px; gap: 10px; }
   .row-icon { width: 34px; height: 34px; font-size: 0.85rem; }
   .row-title { font-size: 0.86rem; }
   .row-sub { font-size: 0.7rem; }
-  .row-item.row-item-open { border-radius: 16px 16px 0 0; }
-  .row-expand { padding: 4px 14px 14px 58px; border-radius: 0 0 16px 16px; }
+  .row-item.row-item-open { border-radius: 18px 18px 0 0; }
+  .row-expand { padding: 4px 16px 16px 60px; border-radius: 0 0 18px 18px; }
   .row-expand .detail-thumb { margin-left: -44px; }
 
   .onboarding { padding: 20px 12px; align-items: stretch; }
