@@ -33,6 +33,13 @@
   <section class="results-header">
     <h2 id="confirmedCount">Loading…</h2>
     <div class="results-header-actions">
+      <label class="sort-control">Sort by
+        <select id="cardSortSelect">
+          <option value="commute">Best commute first</option>
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+        </select>
+      </label>
       <div class="view-toggle" role="tablist" aria-label="View">
         <button type="button" id="viewCards" class="view-toggle-btn active" role="tab" aria-selected="true">Cards</button>
         <button type="button" id="viewTable" class="view-toggle-btn" role="tab" aria-selected="false">All Listings (table)</button>

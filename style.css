@@ -56,6 +56,16 @@ main {
 .results-header h2 { font-size: 1rem; font-weight: 600; color: var(--muted); margin: 0; }
 .results-header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
+.sort-control { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--muted); }
+.sort-control select {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+}
+
 .view-toggle { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .view-toggle-btn {
   cursor: pointer;
