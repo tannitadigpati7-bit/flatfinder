@@ -80,10 +80,33 @@ function boolIcon(value) {
   return "UNKNOWN";
 }
 
+// Only ever renders a real image_url lifted from the source post/actor
+// (see pipeline/sources/telegram_public.py, apify_generic.py) — never a
+// placeholder or stock photo. onerror removes it rather than showing a
+// broken-image icon, since a dead link isn't worth fabricating a stand-in for.
+function thumbnailHtml(listing) {
+  if (!listing.image_url) return "";
+  return `<img class="card-thumb" src="${escapeAttr(listing.image_url)}" alt="" loading="lazy" onerror="this.remove()">`;
+}
+
+// Makes the whole card tappable through to the original listing — the
+// existing "View Original Listing" button still works as its own link (a
+// click there is left alone), this just extends the same navigation to
+// anywhere else on the card. No-op when there's no url to send it to.
+function attachCardClickthrough(card, listing) {
+  if (!listing.url) return;
+  card.classList.add("has-link");
+  card.addEventListener("click", (e) => {
+    if (e.target.closest("a")) return;
+    window.open(listing.url, "_blank", "noopener");
+  });
+}
+
 function renderConfirmedCard(listing) {
   const card = document.createElement("article");
   card.className = "card confirmed";
   card.innerHTML = `
+    ${thumbnailHtml(listing)}
     <div class="card-top">
       <div class="rent">${fmtMoney(listing.rent)}/month</div>
       ${statusBadge(listing)}
@@ -105,6 +128,7 @@ function renderConfirmedCard(listing) {
     ${listing.score_reasons && listing.score_reasons.length ? `<div class="why">Ranked for: ${listing.score_reasons.map(escapeHtml).join(" · ")}</div>` : ""}
     ${listing.url ? `<a class="view-link" href="${escapeAttr(listing.url)}" target="_blank" rel="noopener">View Original Listing</a>` : '<div class="view-link disabled">No source link available</div>'}
   `;
+  attachCardClickthrough(card, listing);
   return card;
 }
 
@@ -112,6 +136,7 @@ function renderNeedsVerificationCard(listing) {
   const card = document.createElement("article");
   card.className = "card needs-verification";
   card.innerHTML = `
+    ${thumbnailHtml(listing)}
     <div class="card-top">
       <div class="rent">${fmtMoney(listing.rent)}/month</div>
       ${statusBadge(listing)}
@@ -123,6 +148,7 @@ function renderNeedsVerificationCard(listing) {
     <div class="meta">${timeAgo(listing.first_seen)} · via ${escapeHtml(listing.source || "unknown source")}</div>
     ${listing.url ? `<a class="view-link" href="${escapeAttr(listing.url)}" target="_blank" rel="noopener">View Original Listing</a>` : '<div class="view-link disabled">No source link available</div>'}
   `;
+  attachCardClickthrough(card, listing);
   return card;
 }
 
@@ -130,6 +156,7 @@ function renderNearMatchCard(listing) {
   const card = document.createElement("article");
   card.className = "card near-match";
   card.innerHTML = `
+    ${thumbnailHtml(listing)}
     <div class="card-top">
       <div class="rent">${fmtMoney(listing.rent)}/month</div>
     </div>
@@ -138,6 +165,7 @@ function renderNearMatchCard(listing) {
     <div class="meta">via ${escapeHtml(listing.source || "unknown source")}</div>
     ${listing.url ? `<a class="view-link" href="${escapeAttr(listing.url)}" target="_blank" rel="noopener">View Original Listing</a>` : '<div class="view-link disabled">No source link available</div>'}
   `;
+  attachCardClickthrough(card, listing);
   return card;
 }
 

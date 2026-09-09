@@ -28,6 +28,10 @@ DEFAULT_CHANNELS = "HousingBangalore,housingourbengaluru"
 
 MSG_WRAPPER_RE = re.compile(r'<div class="tgme_widget_message[^"]*"\s+data-post="([^"]+)"[^>]*>')
 MSG_TEXT_RE = re.compile(r'<div class="tgme_widget_message_text[^"]*"[^>]*>([\s\S]*?)</div>')
+# Telegram's public preview renders a photo as a background-image style on
+# an anchor with this class — the URL is Telegram's own CDN, a real photo
+# from the actual post, never generated or guessed.
+MSG_PHOTO_RE = re.compile(r'tgme_widget_message_photo_wrap[^"]*"\s+style="background-image:url\(\'([^\']+)\'\)')
 
 # A message is worth extracting only if it plausibly describes a rental at
 # all — otherwise a channel's off-topic chatter would flood the pipeline
@@ -63,21 +67,37 @@ class TelegramPublicSource(Source):
 
     def _listings_from_channel(self, channel: str) -> List[Listing]:
         html_doc = self._fetch_channel_html(channel)
-        wrappers = list(MSG_WRAPPER_RE.finditer(html_doc))
-        texts = list(MSG_TEXT_RE.finditer(html_doc))
+        wrapper_matches = list(MSG_WRAPPER_RE.finditer(html_doc))
 
         listings = []
-        for wrapper_match, text_match in zip(wrappers, texts):
+        for i, wrapper_match in enumerate(wrapper_matches):
+            # Slice out just this message's own HTML block (up to the next
+            # message's wrapper, or end of document for the last one) so
+            # text/photo extraction can't cross-contaminate between
+            # messages — the previous zip(wrappers, texts) pairing broke
+            # silently whenever a message had no text div (photo-only
+            # posts), misaligning every message after it.
+            block_start = wrapper_match.start()
+            block_end = wrapper_matches[i + 1].start() if i + 1 < len(wrapper_matches) else len(html_doc)
+            block = html_doc[block_start:block_end]
+
             data_post = wrapper_match.group(1)  # "channel/12345"
             post_id = data_post.split("/")[-1]
-            text = _strip_html(text_match.group(1))
+
+            text_match = MSG_TEXT_RE.search(block)
+            text = _strip_html(text_match.group(1)) if text_match else ""
             if not text or not RENTAL_HINT_RE.search(text):
                 continue
+
+            photo_match = MSG_PHOTO_RE.search(block)
+            image_url = photo_match.group(1) if photo_match else None
+
             listings.append(Listing(
                 source=f"Telegram @{channel}",
                 source_listing_id=post_id,
                 url=f"https://t.me/{channel}/{post_id}",
                 raw_text=text,
+                image_url=image_url,
             ))
         return listings
 

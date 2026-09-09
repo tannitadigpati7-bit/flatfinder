@@ -16,6 +16,7 @@ create table if not exists public.listings (
   url                text,
   title              text,
   raw_text           text,
+  image_url          text,
 
   -- freshness
   first_seen         timestamptz,
@@ -75,6 +76,7 @@ create table if not exists public.listings (
 -- contacted", "Contacted", "Visited", "Not interested", or anything else.
 alter table public.listings add column if not exists notes text;
 alter table public.listings add column if not exists personal_status text;
+alter table public.listings add column if not exists image_url text;
 
 create index if not exists listings_match_status_idx on public.listings (match_status);
 create index if not exists listings_commute_idx on public.listings (commute_minutes);

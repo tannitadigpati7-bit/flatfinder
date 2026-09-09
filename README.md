@@ -33,6 +33,13 @@ Telegram/Apify-sourced listing carries one; only a hand-typed manual
 capture without a link can lack it), an explicit "No source link
 available" notice. Never silently omitted.
 
+Each card also shows a thumbnail when `image_url` is set — a real photo URL
+lifted straight from the source (Telegram's own post image via
+`tgme_widget_message_photo_wrap`, or an Apify actor's own image field, both
+best-effort per-source extraction, never generated or stock). No image_url
+means no thumbnail slot, not a placeholder. Tapping anywhere on a card
+(not just the "View Original Listing" button) opens the source `url`.
+
 ## Architecture
 
 ```
