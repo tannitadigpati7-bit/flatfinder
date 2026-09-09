@@ -93,45 +93,52 @@ function boolIcon(value) {
   return "UNKNOWN";
 }
 
-// Only ever styled with a real image_url lifted from the source post/actor
-// (see pipeline/sources/telegram_public.py, apify_generic.py) — never a
-// placeholder or stock photo. Using a background-image div rather than an
-// <img> means a dead URL just quietly shows the muted background instead
-// of a broken-image icon — nothing to fabricate a stand-in for.
-function tileThumbHtml(listing) {
-  if (listing.image_url) {
-    return `<div class="tile-thumb" style="background-image:url('${escapeAttr(listing.image_url)}')"></div>`;
-  }
-  return `<div class="tile-thumb tile-thumb-empty"><span>🏠</span></div>`;
+// Row background color: a hard-requirement signal you can read at a
+// glance, not decoration. Brokerage is checked first and overrides rent —
+// a broker-involved listing fails a hard requirement outright regardless
+// of how good the rent looks, so it gets its own color rather than being
+// folded into the rent tiers.
+function rowColorClass(listing) {
+  if (listing.brokerage_status === "broker") return "row-blue";
+  if (listing.rent == null) return "row-amber";
+  return listing.rent <= 15000 ? "row-green" : "row-red";
 }
 
-function tileBadge(listing) {
-  if (listing.match_status === "rejected") {
-    const n = listing.fail_reasons.length;
-    return `<span class="status-badge status-rejected">${n} issue${n === 1 ? "" : "s"}</span>`;
+// The one line of context a row has room for, since everything else now
+// lives behind the external listing link (or, when there is none, the
+// detail dialog — see renderRow). Prioritizes whichever hard-requirement
+// signal is most informative for this listing's match_status.
+function rowSubtitle(listing) {
+  if (listing.match_status === "rejected" && listing.fail_reasons && listing.fail_reasons.length) {
+    return `Fails: ${listing.fail_reasons.join("; ")}`;
   }
-  if (listing.match_status === "needs_verification") {
-    return `<span class="status-badge status-needs_verification">Needs verification</span>`;
+  if (listing.match_status === "needs_verification" && listing.unknown_fields && listing.unknown_fields.length) {
+    return `Needs verification: ${listing.unknown_fields.join(", ")}`;
   }
-  return statusBadge(listing);
+  return `via ${listing.source || "unknown source"} · ${timeAgo(listing.first_seen, listing) || "UNKNOWN"}`;
 }
 
-// Compact grid tile — just enough to scan a list at a glance. Tapping opens
-// the full detail dialog (openDetail) rather than navigating away, so
-// browsing many listings doesn't mean leaving the app on every tap.
-function renderTile(listing) {
-  const tile = document.createElement("article");
-  tile.className = "tile";
-  tile.innerHTML = `
-    ${tileThumbHtml(listing)}
-    <div class="tile-body">
-      <div class="tile-rent">${fmtMoney(listing.rent)}${listing.rent != null ? "/mo" : ""}</div>
-      <div class="tile-sub">${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</div>
-      <div class="tile-badges">${tileBadge(listing)}</div>
+// Full-width stacked row, colored by rent/brokerage (see rowColorClass).
+// Tapping goes straight to the source listing when there is one; when
+// there isn't (rare — see README), it falls back to the in-app detail
+// dialog instead of being a dead tap, since there's nowhere else to send
+// the click.
+function renderRow(listing) {
+  const row = document.createElement("article");
+  row.className = `row-item ${rowColorClass(listing)}`;
+  row.innerHTML = `
+    <div class="row-icon">${listing.bhk != null ? escapeHtml(String(listing.bhk)) : "🏠"}</div>
+    <div class="row-text">
+      <div class="row-title">${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</div>
+      <div class="row-sub">${escapeHtml(rowSubtitle(listing))}</div>
     </div>
+    <div class="row-amount">${fmtMoney(listing.rent)}${listing.rent != null ? "<span>/mo</span>" : ""}</div>
   `;
-  tile.addEventListener("click", () => openDetail(listing));
-  return tile;
+  row.addEventListener("click", () => {
+    if (listing.url) window.open(listing.url, "_blank", "noopener");
+    else openDetail(listing);
+  });
+  return row;
 }
 
 // Full detail content shown in the expanded dialog — everything the old
@@ -361,11 +368,11 @@ function render() {
   const rejected = state.listings.filter((l) => l.match_status === "rejected");
 
   els.confirmed.innerHTML = "";
-  confirmed.forEach((l) => els.confirmed.appendChild(renderTile(l)));
+  confirmed.forEach((l) => els.confirmed.appendChild(renderRow(l)));
   els.confirmedCount.textContent = `${confirmed.length} confirmed match${confirmed.length === 1 ? "" : "es"}`;
 
   els.needsVerification.innerHTML = "";
-  needsVerification.forEach((l) => els.needsVerification.appendChild(renderTile(l)));
+  needsVerification.forEach((l) => els.needsVerification.appendChild(renderRow(l)));
   els.needsVerificationCount.textContent = `${needsVerification.length} listing${needsVerification.length === 1 ? "" : "s"} needing verification`;
   els.needsVerificationToggle.parentElement.hidden = needsVerification.length === 0;
 
@@ -374,7 +381,7 @@ function render() {
     .slice()
     .sort((a, b) => a.fail_reasons.length - b.fail_reasons.length)
     .slice(0, 20)
-    .forEach((l) => els.nearMatches.appendChild(renderTile(l)));
+    .forEach((l) => els.nearMatches.appendChild(renderRow(l)));
   els.nearMatchesSection.hidden = rejected.length === 0;
 
   els.emptyState.hidden = confirmed.length !== 0;
