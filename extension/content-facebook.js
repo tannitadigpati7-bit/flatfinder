@@ -28,7 +28,7 @@ function makeButton(article) {
   btn.type = "button";
   btn.style.cssText = [
     "position:absolute", "top:6px", "right:6px", "z-index:2147483647",
-    "background:#1a73e8", "color:#fff", "border:none", "border-radius:6px",
+    "background:#2f6f4f", "color:#fff", "border:none", "border-radius:6px",
     "padding:5px 10px", "font:600 12px system-ui,sans-serif", "cursor:pointer",
     "box-shadow:0 1px 4px rgba(0,0,0,0.3)",
   ].join(";");
