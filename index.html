@@ -10,24 +10,76 @@
 </head>
 <body>
 <header>
+  <button type="button" id="settingsBtn" class="settings-btn" aria-label="Edit your search settings">⚙︎</button>
   <h1>FlatFinder</h1>
-  <p class="subtitle">Real, currently available 1BHK rentals in Bangalore — not a filtered listing site, a personal search engine</p>
+  <p class="subtitle">Real, currently available rentals — not a filtered listing site, a personal search engine</p>
 </header>
 
+<div id="onboarding" class="onboarding" hidden>
+  <div id="onboardStep1" class="onboard-step">
+    <div class="onboard-card">
+      <h1 class="onboard-title">Set up FlatFinder</h1>
+      <p class="hint">This runs entirely in your browser — nothing here is sent anywhere except what you explicitly save. Set your own search criteria and this device will check every listing against them.</p>
+      <form id="onboardForm">
+        <label>Your name (optional)
+          <input type="text" name="name" placeholder="For a personal touch, not required">
+        </label>
+        <label>Office / destination name
+          <input type="text" name="officeName" required placeholder="e.g. My Office">
+        </label>
+        <label>Office / destination address
+          <input type="text" name="officeAddress" required placeholder="Full address — used to calculate commute time">
+        </label>
+        <div class="onboard-grid">
+          <label>BHK
+            <input type="number" name="bhk" step="0.5" min="0.5">
+          </label>
+          <label>Furnishing
+            <select name="furnishing">
+              <option value="none">Unfurnished</option>
+              <option value="semi">Semi-furnished</option>
+              <option value="full">Fully furnished</option>
+            </select>
+          </label>
+          <label>Max rent (₹/month)
+            <input type="number" name="maxRent" min="0" step="500">
+          </label>
+          <label>Max deposit (₹)
+            <input type="number" name="maxDeposit" min="0" step="1000">
+          </label>
+          <label>Max commute (minutes)
+            <input type="number" name="maxCommuteMinutes" min="1" step="5">
+          </label>
+        </div>
+        <label class="checkbox-label"><input type="checkbox" name="lift"> Lift mandatory</label>
+        <label class="checkbox-label"><input type="checkbox" name="brokerageZero"> Brokerage must be ₹0 (owner-direct)</label>
+        <button type="submit" class="onboard-continue">Continue</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="onboardStep2" class="onboard-step" hidden>
+    <div class="onboard-card onboard-explainer">
+      <div class="onboard-icon">🔍</div>
+      <h2>How this works</h2>
+      <p>FlatFinder checks real listings from Telegram, manually captured posts, and (if configured) other sources against exactly the criteria you just set — never a guess, never filler. Unknown fields stay unknown.</p>
+      <div class="onboard-swatches">
+        <span class="onboard-swatch row-green">Fits your budget</span>
+        <span class="onboard-swatch row-amber">Rent unknown</span>
+        <span class="onboard-swatch row-red">Over budget</span>
+        <span class="onboard-swatch row-blue">Broker involved</span>
+      </div>
+      <p>Tap a listing to see details right there in the list. Tap it again to open the original post.</p>
+      <button type="button" id="onboardContinue" class="onboard-continue">Get started</button>
+    </div>
+  </div>
+</div>
+
 <main>
-  <section class="requirements" aria-label="Fixed search requirements">
-    <h2>Configured requirements</h2>
-    <ul>
-      <li>1 BHK</li>
-      <li>Semi-furnished</li>
-      <li>Rent ≤ ₹15,000/month</li>
-      <li>Deposit ≤ ₹50,000</li>
-      <li>Lift mandatory</li>
-      <li>Brokerage ₹0 (owner-direct preferred)</li>
-      <li>≤ 30 min commute to Bathla Aluminium Corporate Office, Vasanth Nagar</li>
-      <li>Anywhere in Bangalore that meets the commute requirement</li>
-    </ul>
-    <p class="hint">These are fixed, not adjustable filters — every listing shown here is checked against all of them. A listing only appears under "Confirmed Matches" when every one is known and satisfied.</p>
+  <section class="requirements" aria-label="Search requirements">
+    <h2>Configured requirements <button type="button" id="editRequirements" class="requirements-edit">Edit</button></h2>
+    <ul id="requirementsList"></ul>
+    <p class="hint">These are fixed, not adjustable per-listing filters — every listing shown here is checked against all of them. A listing only appears under "Confirmed Matches" when every one is known and satisfied.</p>
   </section>
 
   <section class="results-header">
@@ -176,6 +228,7 @@
 </dialog>
 
 <script src="config.js"></script>
+<script src="profile.js"></script>
 <script src="parser.js"></script>
 <script src="geo-client.js"></script>
 <script src="filter-client.js"></script>

@@ -37,8 +37,39 @@ Each card also shows a thumbnail when `image_url` is set — a real photo URL
 lifted straight from the source (Telegram's own post image via
 `tgme_widget_message_photo_wrap`, or an Apify actor's own image field, both
 best-effort per-source extraction, never generated or stock). No image_url
-means no thumbnail slot, not a placeholder. Tapping anywhere on a card
-(not just the "View Original Listing" button) opens the source `url`.
+means no thumbnail slot, not a placeholder. Tapping a listing expands it
+in place; tapping the expanded row again (or the "View Original Listing"
+link inside it) opens the source `url`.
+
+## Personalizing for your own search (profile.js)
+
+`config.js`'s `OFFICE_ADDRESS`/`REQUIREMENTS` are this deployment's
+*defaults*, not a hard requirement to edit code — the site now asks each
+visitor to confirm or replace them in a one-time sign-up form (skippable
+only by already having a saved profile), stored in that browser's
+`localStorage` via `profile.js`. No accounts, no password, nothing sent
+anywhere — it's per-device, and re-editable anytime via the ⚙︎ button in
+the header or the "Edit" link next to "Configured requirements".
+
+Since the shared pipeline (`pipeline/run.py`) only ever computes
+`match_status`/`commute_minutes` once, against *this deployment's own*
+default office/requirements, a visitor whose saved profile actually
+differs from those defaults gets those decisions **recomputed
+client-side** (`recomputeForProfile` in `app.js`) using each listing's
+already-extracted raw fields (rent, bhk, lat/lng, etc.) — never a guess,
+just the same `filter-client.js` logic the pipeline itself runs, evaluated
+against different inputs. Nothing is written back to the shared database;
+this only changes what that one browser displays. A profile identical to
+the deployment's defaults skips this entirely and trusts the pipeline's
+own (more accurate, traffic-aware-if-configured) stored values as-is.
+
+**Known limitation:** this personalization only applies to the main site
+(`index.html`). The Chrome extension and the mobile share-target
+(`share.html`) still hard-filter a manually captured listing against
+`config.js`'s fixed defaults, not a saved profile — they don't load
+`profile.js`. If this matters to you, it's a reasonable follow-up: wire
+those two capture surfaces to read the same saved profile before calling
+`applyHardFilter`.
 
 ## Architecture
 

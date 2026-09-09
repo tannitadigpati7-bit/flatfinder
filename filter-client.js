@@ -26,12 +26,14 @@
     if (l.deposit > req.maxDeposit) return ["fail", `deposit ₹${l.deposit} exceeds ₹${req.maxDeposit}`];
     return ["pass", ""];
   }
-  function checkLift(l) {
+  function checkLift(l, req) {
+    if (req.lift === false) return ["pass", ""];
     if (l.lift === null || l.lift === undefined) return ["unknown", "lift: UNKNOWN"];
     if (l.lift !== true) return ["fail", "no lift"];
     return ["pass", ""];
   }
-  function checkBrokerage(l) {
+  function checkBrokerage(l, req) {
+    if (req.brokerageZero === false) return ["pass", ""];
     if (!l.brokerage_status) return ["unknown", "brokerage: UNKNOWN"];
     if (l.brokerage_status !== "zero") return ["fail", "brokerage applies"];
     return ["pass", ""];
