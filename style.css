@@ -141,10 +141,21 @@ main {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  overflow: hidden; /* keeps the thumbnail's bled edges inside the rounded corners */
 }
 .card.confirmed { border-left: 4px solid var(--accent); }
 .card.needs-verification { border-left: 4px solid var(--warn); }
 .card.near-match { border-left: 4px solid var(--danger); opacity: 0.9; }
+.card.has-link { cursor: pointer; }
+.card.has-link:hover { border-color: var(--accent); }
+
+.card-thumb {
+  width: calc(100% + 32px);
+  margin: -16px -16px 4px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--bg);
+}
 
 .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .card .rent { font-size: 1.2rem; font-weight: 700; color: var(--accent); }
@@ -314,6 +325,7 @@ dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
 
   .card { padding: 14px; }
   .card .rent { font-size: 1.1rem; }
+  .card-thumb { width: calc(100% + 28px); margin: -14px -14px 4px; }
 
   .view-link { padding: 11px 12px; font-size: 0.9rem; }
 

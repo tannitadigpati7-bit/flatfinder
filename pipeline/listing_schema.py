@@ -29,6 +29,9 @@ class Listing:
     url: Optional[str] = None            # original listing URL — never fabricated
     title: Optional[str] = None
     raw_text: Optional[str] = None       # full original text, preserved for audit
+    image_url: Optional[str] = None      # a real image URL lifted from the source
+                                          # post/actor output — never generated,
+                                          # never a stock/placeholder photo
 
     # --- discovery timestamps (ISO 8601 UTC) ---
     first_seen: Optional[str] = None

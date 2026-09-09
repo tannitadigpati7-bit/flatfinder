@@ -52,13 +52,37 @@ FIELD_CANDIDATES = {
     "ownerStatus": ["postedBy", "listedBy", "sourceType"],
     "contact": ["contactName", "ownerName", "postedByName"],
     "id": ["id", "propertyId", "listingId"],
+    "image": ["image", "imageUrl", "photo", "photoUrl", "mainImage", "coverImage", "thumbnail"],
 }
+# Some actors return a list of photo URLs (or list of objects with a url/src
+# key) instead of one scalar field — tried only after every scalar
+# candidate above comes up empty, and only the first real entry is used
+# (never combined/guessed at) so the listing still shows at most one image.
+IMAGE_LIST_CANDIDATES = ["images", "photos", "photoUrls", "imageUrls"]
 
 
 def _pick(item: dict, field: str):
     for key in FIELD_CANDIDATES[field]:
         if key in item and item[key] not in (None, ""):
             return item[key]
+    return None
+
+
+def _pick_image(item: dict):
+    scalar = _pick(item, "image")
+    if scalar:
+        return scalar
+    for key in IMAGE_LIST_CANDIDATES:
+        values = item.get(key)
+        if not isinstance(values, list) or not values:
+            continue
+        first = values[0]
+        if isinstance(first, str) and first:
+            return first
+        if isinstance(first, dict):
+            for k in ("url", "src", "imageUrl"):
+                if first.get(k):
+                    return first[k]
     return None
 
 
@@ -168,6 +192,7 @@ class ApifyGenericSource(Source):
                     url=url,
                     title=_pick(item, "title"),
                     raw_text=_pick(item, "raw_text") or _pick(item, "title") or "",
+                    image_url=_pick_image(item),
                     location=_pick(item, "location"),
                     address=_pick(item, "address"),
                     rent=_safe_float(_pick(item, "rent")),
