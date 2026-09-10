@@ -50,9 +50,17 @@ def _supabase_request(path: str, method: str = "GET", data=None, extra_headers=N
 
     body = json.dumps(data).encode("utf-8") if data is not None else None
     req = urllib.request.Request(url, data=body, method=method, headers=headers)
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        raw = resp.read().decode("utf-8")
-        return json.loads(raw) if raw else None
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw) if raw else None
+    except urllib.error.HTTPError as e:
+        # PostgREST's actual error (missing column, check-constraint
+        # violation, bad on_conflict target, etc.) is in the response
+        # body — the bare HTTPError code/reason alone isn't enough to
+        # diagnose a 400 from a batch of 30+ rows.
+        detail = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Supabase {method} {path} -> HTTP {e.code}: {detail}") from e
 
 
 def now_iso() -> str:
