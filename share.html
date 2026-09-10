@@ -133,17 +133,14 @@
 
   const statusEl = document.getElementById("shareStatus");
   const matchEl = document.getElementById("matchStatus");
+  const saveBtn = document.getElementById("saveShare");
 
-  document.getElementById("shareForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
+  async function saveCurrentForm() {
     if (!window.FlatFinderSupabase.isConfigured()) {
       statusEl.textContent = "No shared backend configured — set SUPABASE_URL/SUPABASE_ANON_KEY in config.js first (see README).";
       statusEl.className = "err";
-      return;
+      return false;
     }
-
-    statusEl.textContent = "Geocoding and computing commute…";
-    statusEl.className = "";
 
     const formParsed = {
       title: document.getElementById("title").value.trim() || null,
@@ -193,11 +190,39 @@
       await window.FlatFinderSupabase.insertListing(stored);
       statusEl.textContent = "Saved. You can close this tab.";
       statusEl.className = "ok";
+      return true;
     } catch (err) {
       statusEl.textContent = "Couldn't reach the database — check your connection.";
       statusEl.className = "err";
+      return false;
     }
+  }
+
+  document.getElementById("shareForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await saveCurrentForm();
   });
+
+  // Facebook/WhatsApp shares usually carry only a bare link, no caption —
+  // this page used to sit there waiting for someone to review every field
+  // and tap Save, which doesn't work for someone en route to see a place
+  // with no time to fill a form. So a genuine share-target open (there's
+  // a url/title/text query param — as opposed to someone just visiting
+  // share.html directly) saves immediately with whatever the share gave
+  // us, no tap required. Fields that came through empty stay UNKNOWN, same
+  // as every other capture path — never guessed. The form stays open and
+  // editable afterward so pasting the real post text (which fills in the
+  // fields FB doesn't hand over) and saving again is still an option,
+  // just no longer a requirement to get something recorded at all.
+  const isShareTargetOpen = params.has("url") || params.has("title") || params.has("text");
+  if (isShareTargetOpen) {
+    saveCurrentForm().then((ok) => {
+      if (ok) {
+        saveBtn.textContent = "Save again";
+        statusEl.textContent = "Saved automatically. Add missing details above and tap “Save again” any time, or just close this tab.";
+      }
+    });
+  }
 </script>
 </body>
 </html>

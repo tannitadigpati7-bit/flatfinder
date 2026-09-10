@@ -772,15 +772,18 @@ if (els.editRequirements) {
 
 // ------------------------------------------------------------------- init
 
+// Falls back to config.js's own defaults rather than gating the whole app
+// behind a forced onboarding screen when no profile is saved yet — this is
+// a single-owner personal deployment, so "no saved profile" (a fresh
+// browser storage, a private tab, or an in-app browser like Facebook's
+// that doesn't share storage with the main browser) should still show
+// real results immediately. Onboarding stays reachable via the settings
+// button for anyone who wants to customize it.
 function init() {
-  const existing = window.FlatFinderProfile.getProfile();
-  if (existing) {
-    applyProfile(existing);
-    renderRequirementsList();
-    loadListings();
-  } else {
-    showOnboarding(window.FlatFinderProfile.defaultProfile(), { skipExplainer: false });
-  }
+  const profile = window.FlatFinderProfile.getProfile() || window.FlatFinderProfile.defaultProfile();
+  applyProfile(profile);
+  renderRequirementsList();
+  loadListings();
 }
 
 init();
