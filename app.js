@@ -147,22 +147,31 @@ function boolIcon(value) {
   return "UNKNOWN";
 }
 
-// Row background color: a hard-requirement signal you can read at a
-// glance, not decoration. Brokerage is checked first and overrides rent —
-// a broker-involved listing fails a hard requirement outright regardless
-// of how good the rent looks, so it gets its own color rather than being
-// folded into the rent tiers.
-function rowColorClass(listing) {
-  if (listing.brokerage_status === "broker") return "row-blue";
-  if (listing.rent == null) return "row-amber";
-  return listing.rent <= 15000 ? "row-green" : "row-red";
+// Card color is per-listing visual variety (a scannable card-deck feel),
+// not a status signal — match_status/hard-requirement meaning is already
+// carried by which section a listing is under (Confirmed/Needs
+// Verification/Near Matches) and by the tertiary line's own text, so the
+// color doesn't need to double as that signal too. Hashing the listing's
+// stable id (falling back to its source+source_listing_id) means the same
+// listing always lands on the same palette color across re-renders/re-sorts,
+// rather than reshuffling every time.
+const CARD_PALETTE = ["pal-sage", "pal-blue", "pal-beige", "pal-orange", "pal-yellow", "pal-red", "pal-gray", "pal-lavender"];
+function paletteClassForListing(listing) {
+  const key = String(listing.id || `${listing.source}:${listing.source_listing_id}`);
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0;
+  return CARD_PALETTE[Math.abs(hash) % CARD_PALETTE.length];
 }
 
-// The one line of context a row has room for, since everything else now
-// lives behind the external listing link (or, when there is none, the
-// detail dialog — see renderRow). Prioritizes whichever hard-requirement
-// signal is most informative for this listing's match_status.
-function rowSubtitle(listing) {
+// Secondary line: BHK + furnishing, the next-most-important thing after
+// location/rent. Tertiary line: whichever single hard-requirement signal
+// matters most right now (why it failed, what's unverified, or just
+// source+freshness for a genuinely confirmed listing).
+function rowSecondaryLine(listing) {
+  const bhk = listing.bhk != null ? `${listing.bhk} BHK` : "BHK UNKNOWN";
+  return listing.furnishing ? `${bhk} · ${furnishingLabel(listing.furnishing)}` : bhk;
+}
+function rowTertiaryLine(listing) {
   if (listing.match_status === "rejected" && listing.fail_reasons && listing.fail_reasons.length) {
     return `Fails: ${listing.fail_reasons.join("; ")}`;
   }
@@ -222,43 +231,55 @@ function renderExpandContent(listing) {
   return parts.join("");
 }
 
-// Full-width stacked row, colored by rent/brokerage (see rowColorClass).
-// First tap expands the row in place — the expansion is the same color,
-// just taller, so it reads as one continuous block unfolding rather than
-// a popup — showing everything a click doesn't. Tapping the already-
-// expanded row (or the "View Original Listing" link inside it) goes to
-// the source. Only one row stays expanded at a time.
+// Compact card-deck row: a small circular badge beside a tight 3-line
+// text block (primary: location + rent; secondary: BHK/furnishing;
+// tertiary: why it failed / what's unverified / source+freshness), colored
+// per-listing from CARD_PALETTE for a scannable deck rather than a wall of
+// one color. First tap expands smoothly in place (a CSS grid
+// 0fr->1fr animation, not an abrupt show/hide) revealing everything a
+// glance doesn't — same color, so it reads as the card itself unfolding.
+// Tapping the already-expanded row (or the "View Original Listing" link
+// inside it) goes to the source. Only one row stays expanded at a time.
 function renderRow(listing) {
   const wrap = document.createElement("div");
   wrap.className = "row-wrap";
 
-  const color = rowColorClass(listing);
+  const color = paletteClassForListing(listing);
   const row = document.createElement("article");
   row.className = `row-item ${color}`;
   row.innerHTML = `
-    <div class="row-left">
-      <div class="row-icon">${listing.bhk != null ? escapeHtml(String(listing.bhk)) : "🏠"}</div>
-      <div class="row-sub">${escapeHtml(rowSubtitle(listing))}</div>
-      <div class="row-title">${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</div>
+    <div class="row-badge">${listing.bhk != null ? escapeHtml(String(listing.bhk)) : "🏠"}</div>
+    <div class="row-main">
+      <div class="row-primary">
+        <span class="row-location">${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</span>
+        <span class="row-rent">${fmtMoney(listing.rent)}</span>
+      </div>
+      <div class="row-secondary">${escapeHtml(rowSecondaryLine(listing))}</div>
+      <div class="row-tertiary">${escapeHtml(rowTertiaryLine(listing))}</div>
     </div>
-    <div class="row-amount">${fmtMoney(listing.rent)}${listing.rent != null ? "<span>/mo</span>" : ""}</div>
   `;
 
+  const expandOuter = document.createElement("div");
+  expandOuter.className = "row-expand-outer";
+  const expandInner = document.createElement("div");
+  expandInner.className = "row-expand-inner";
   const expandPanel = document.createElement("div");
   expandPanel.className = `row-expand ${color}`;
-  expandPanel.hidden = true;
+  expandInner.appendChild(expandPanel);
+  expandOuter.appendChild(expandInner);
 
   row.addEventListener("click", () => {
-    if (!expandPanel.hidden) {
+    const isOpen = expandOuter.classList.contains("open");
+    if (isOpen) {
       if (listing.url) window.open(listing.url, "_blank", "noopener");
       return;
     }
-    document.querySelectorAll(".row-wrap .row-item.row-item-open").forEach((el) => {
-      el.classList.remove("row-item-open");
-      el.nextElementSibling.hidden = true;
+    document.querySelectorAll(".row-expand-outer.open").forEach((el) => {
+      el.classList.remove("open");
+      el.previousElementSibling.classList.remove("row-item-open");
     });
     row.classList.add("row-item-open");
-    expandPanel.hidden = false;
+    expandOuter.classList.add("open");
     if (!expandPanel.dataset.built) {
       expandPanel.innerHTML = renderExpandContent(listing);
       expandPanel.dataset.built = "1";
@@ -267,7 +288,7 @@ function renderRow(listing) {
   });
 
   wrap.appendChild(row);
-  wrap.appendChild(expandPanel);
+  wrap.appendChild(expandOuter);
   return wrap;
 }
 

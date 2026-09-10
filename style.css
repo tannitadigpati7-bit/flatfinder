@@ -198,91 +198,107 @@ button { font-family: inherit; }
 }
 
 /* --------------------------------------------------------- row items */
-/* Full-width stacked row, colored by rent/brokerage (see rowColorClass
-   in app.js) — the color itself is a hard-requirement signal, not
-   decoration: green = rent within budget, amber = rent unknown, red =
-   rent over budget, blue = a broker is involved (hard fail regardless
-   of rent). Packed tight (4px gap, flat — no drop shadow) so the list
-   reads as one stacked block of cards, not separated tiles floating on
-   the page. First tap expands in place (row-expand below); tapping the
-   expanded row again, or the link inside it, opens the source listing. */
+/* Card-deck system: each listing is a compact, colored card. Color is
+   per-listing variety (see CARD_PALETTE in app.js), not a status signal —
+   the section a card sits under (Confirmed/Needs Verification/Near
+   Matches) already carries that meaning. Packed tight (3px gap, flat, no
+   shadow) so the list reads as one continuous stack rather than separate
+   floating tiles. First tap expands smoothly in place; tapping the
+   already-expanded row (or the link inside it) opens the source listing. */
 .row-wrap { display: flex; flex-direction: column; }
+.near-matches .row-wrap { opacity: 0.92; }
+
+.pal-sage     { background: #7f9c85; }
+.pal-blue     { background: #7690ab; }
+.pal-beige    { background: #c3a06c; }
+.pal-orange   { background: #c17c4d; }
+.pal-yellow   { background: #cbab5c; }
+.pal-red      { background: #ad6459; }
+.pal-gray     { background: #96938d; }
+.pal-lavender { background: #9484ab; }
 
 .row-item {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
   gap: 12px;
-  padding: 16px 18px 18px;
+  padding: 11px 16px;
   border-radius: 22px;
   cursor: pointer;
   color: #ffffff;
-  transition: transform 0.1s, filter 0.15s;
+  transition: transform 0.1s, filter 0.15s, border-radius 0.25s;
 }
-.row-item:hover { filter: brightness(1.06); }
+.row-item:hover { filter: brightness(1.05); }
 .row-item:active { transform: scale(0.99); }
-.near-matches .row-wrap { opacity: 0.9; }
+.row-item.row-item-open { border-radius: 22px 22px 0 0; }
 
-.row-green { background: #7fa596; }
-.row-amber { background: #baa06f; }
-.row-red   { background: #c96a5e; }
-.row-blue  { background: #8a9bb0; }
-
-/* Icon sits above the two text lines (not beside them) — a small dark
-   badge regardless of the row's own color, for a consistent accent
-   across every row color rather than a same-tinted circle that changes
-   contrast with the background. */
-.row-left { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.row-icon {
-  width: 30px;
-  height: 30px;
+/* Compact circular badge, a lighter frosted tint of whatever color sits
+   behind it (works across every palette color without per-color values) —
+   "a deliberate UI element," not just a circle of text. */
+.row-badge {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.22);
+  background: rgba(255, 255, 255, 0.26);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 700;
-  margin-bottom: 4px;
 }
 
-.row-title {
-  font-size: 0.95rem;
+.row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+
+/* Hierarchy: primary (location + rent) large and bold; secondary (BHK/
+   furnishing) small but solid; tertiary (why it failed / source+age)
+   smallest and faded — three distinct visual weights, not one. */
+.row-primary { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.row-location {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.row-rent { flex-shrink: 0; font-size: 1rem; font-weight: 700; }
+
+.row-secondary {
+  font-size: 0.76rem;
   font-weight: 600;
+  opacity: 0.88;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 60vw;
 }
-.row-sub {
+.row-tertiary {
   font-size: 0.68rem;
-  opacity: 0.75;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  font-weight: 400;
+  opacity: 0.68;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 60vw;
 }
 
-.row-amount {
-  flex-shrink: 0;
-  font-size: 0.95rem;
-  font-weight: 700;
-  text-align: right;
-  padding-top: 2px;
+/* Smooth expand/collapse: animating a CSS grid track (0fr -> 1fr) instead
+   of toggling `hidden` gives a real "unfolding" transition without needing
+   to know the expanded content's height in advance. */
+.row-expand-outer {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 300ms ease;
 }
-.row-amount span { display: block; font-size: 0.62rem; font-weight: 500; opacity: 0.75; }
+.row-expand-outer.open { grid-template-rows: 1fr; }
+.row-expand-inner { overflow: hidden; }
 
-.row-item.row-item-open { border-radius: 20px 20px 0 0; }
-
-/* Same color as the row above it, seamlessly joined — reads as one block
+/* Same color as the row above it, seamlessly joined — reads as one card
    unfolding rather than a popup. Text/borders here are light-on-dark
    overrides of the shared .tag/.meta/.view-link/etc classes (which
    default to dark-on-light for the detail dialog fallback). */
 .row-expand {
-  padding: 4px 18px 18px;
-  border-radius: 0 0 20px 20px;
+  padding: 2px 16px 16px;
+  border-radius: 0 0 22px 22px;
   color: #ffffff;
   cursor: default;
   display: flex;
@@ -593,19 +609,19 @@ dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
   #addListingBtn { width: 100%; min-height: 44px; font-size: 0.95rem; }
 
   .results { gap: 3px; }
-  .row-item { padding: 14px 16px 16px; border-radius: 18px; gap: 10px; }
-  .row-icon { width: 28px; height: 28px; font-size: 0.75rem; }
-  .row-title { font-size: 0.88rem; }
-  .row-sub { font-size: 0.64rem; }
+  .row-item { padding: 9px 13px; border-radius: 18px; gap: 10px; }
+  .row-badge { width: 30px; height: 30px; font-size: 0.75rem; }
+  .row-location, .row-rent { font-size: 0.9rem; }
+  .row-secondary { font-size: 0.72rem; }
+  .row-tertiary { font-size: 0.64rem; }
   .row-item.row-item-open { border-radius: 18px 18px 0 0; }
-  .row-expand { padding: 4px 16px 16px; border-radius: 0 0 18px 18px; }
+  .row-expand { padding: 2px 13px 13px; border-radius: 0 0 18px 18px; }
 
   .onboarding { padding: 20px 12px; align-items: stretch; }
   .onboard-card { padding: 18px; max-width: none; }
   .onboard-title { font-size: 1.15rem; }
   .onboard-grid { grid-template-columns: 1fr; }
   #onboardForm input, #onboardForm select { min-height: 40px; font-size: 1rem; }
-  .row-amount { font-size: 0.86rem; }
 
   .detail-content { padding: 4px 16px 20px; }
   .detail-thumb { width: calc(100% + 32px); margin: -4px -16px 4px; }
