@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FlatFinder — 1BHK near Bathla Aluminium, Bangalore</title>
+<title>flatfinder — 1BHK near Bathla Aluminium, Bangalore</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png" type="image/png">
@@ -11,7 +14,14 @@
 <body>
 <header>
   <button type="button" id="settingsBtn" class="settings-btn" aria-label="Edit your search settings">⚙︎</button>
-  <h1>FlatFinder</h1>
+  <div class="brand-mark">
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M5 4 L5 18 L17 18" stroke="#5ed6c4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M5 18 L15.5 11" stroke="#5ed6c4" stroke-width="1.4" stroke-linecap="round"/>
+      <circle cx="15.5" cy="11" r="1.3" fill="#5ed6c4"/>
+    </svg>
+    <h1>flatfinder</h1>
+  </div>
   <p class="subtitle">Real, currently available rentals — not a filtered listing site, a personal search engine</p>
 </header>
 
@@ -60,14 +70,19 @@
 
   <div id="onboardStep2" class="onboard-step" hidden>
     <div class="onboard-card onboard-explainer">
-      <div class="onboard-icon">🔍</div>
+      <div class="onboard-icon">
+        <svg width="30" height="30" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M5 4 L5 18 L17 18" stroke="#5ed6c4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M5 18 L15.5 11" stroke="#5ed6c4" stroke-width="1.4" stroke-linecap="round"/>
+          <circle cx="15.5" cy="11" r="1.3" fill="#5ed6c4"/>
+        </svg>
+      </div>
       <h2>How this works</h2>
-      <p>FlatFinder checks real listings from Telegram, manually captured posts, and (if configured) other sources against exactly the criteria you just set — never a guess, never filler. Unknown fields stay unknown.</p>
+      <p>flatfinder checks real listings from Telegram, manually captured posts, and (if configured) other sources against exactly the criteria you just set — never a guess, never filler. Unknown fields stay unknown.</p>
       <div class="onboard-swatches">
-        <span class="onboard-swatch row-green">Fits your budget</span>
-        <span class="onboard-swatch row-amber">Rent unknown</span>
-        <span class="onboard-swatch row-red">Over budget</span>
-        <span class="onboard-swatch row-blue">Broker involved</span>
+        <span class="onboard-swatch">Confirmed — fits every requirement</span>
+        <span class="onboard-swatch">Needs verification — one or more fields unknown</span>
+        <span class="onboard-swatch">Near matches — fails on one requirement, shown for reference</span>
       </div>
       <p>Tap a listing to see details right there in the list. Tap it again to open the original post.</p>
       <button type="button" id="onboardContinue" class="onboard-continue">Get started</button>
