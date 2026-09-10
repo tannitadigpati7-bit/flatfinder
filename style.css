@@ -210,51 +210,59 @@ button { font-family: inherit; }
 
 .row-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 12px;
-  padding: 16px 18px;
-  border-radius: 20px;
+  padding: 16px 18px 18px;
+  border-radius: 22px;
   cursor: pointer;
   color: #ffffff;
   transition: transform 0.1s, filter 0.15s;
 }
-.row-item:hover { filter: brightness(1.05); }
+.row-item:hover { filter: brightness(1.06); }
 .row-item:active { transform: scale(0.99); }
 .near-matches .row-wrap { opacity: 0.9; }
 
-.row-green { background: #4a7c62; }
-.row-amber { background: #a8763a; }
-.row-red   { background: #a14b45; }
-.row-blue  { background: #3d5a80; }
+.row-green { background: #7fa596; }
+.row-amber { background: #baa06f; }
+.row-red   { background: #c96a5e; }
+.row-blue  { background: #8a9bb0; }
 
+/* Icon sits above the two text lines (not beside them) — a small dark
+   badge regardless of the row's own color, for a consistent accent
+   across every row color rather than a same-tinted circle that changes
+   contrast with the background. */
+.row-left { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .row-icon {
-  flex-shrink: 0;
-  width: 38px;
-  height: 38px;
+  width: 30px;
+  height: 30px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.22);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 700;
+  margin-bottom: 4px;
 }
 
-.row-text { flex: 1; min-width: 0; }
 .row-title {
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 60vw;
 }
 .row-sub {
-  font-size: 0.74rem;
-  opacity: 0.85;
+  font-size: 0.68rem;
+  opacity: 0.75;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-top: 1px;
+  max-width: 60vw;
 }
 
 .row-amount {
@@ -262,6 +270,7 @@ button { font-family: inherit; }
   font-size: 0.95rem;
   font-weight: 700;
   text-align: right;
+  padding-top: 2px;
 }
 .row-amount span { display: block; font-size: 0.62rem; font-weight: 500; opacity: 0.75; }
 
@@ -272,7 +281,7 @@ button { font-family: inherit; }
    overrides of the shared .tag/.meta/.view-link/etc classes (which
    default to dark-on-light for the detail dialog fallback). */
 .row-expand {
-  padding: 4px 18px 18px 68px;
+  padding: 4px 18px 18px;
   border-radius: 0 0 20px 20px;
   color: #ffffff;
   cursor: default;
@@ -280,7 +289,7 @@ button { font-family: inherit; }
   flex-direction: column;
   gap: 8px;
 }
-.row-expand .detail-thumb { width: calc(100% + 20px); margin: 0 -10px 4px -58px; border-radius: 10px; }
+.row-expand .detail-thumb { width: calc(100% + 20px); margin: 0 -10px 4px; border-radius: 10px; }
 .row-expand .deposit, .row-expand .commute, .row-expand .owner-line,
 .row-expand .unknowns, .row-expand .fails, .row-expand .why, .row-expand .meta {
   color: rgba(255, 255, 255, 0.88);
@@ -584,13 +593,12 @@ dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
   #addListingBtn { width: 100%; min-height: 44px; font-size: 0.95rem; }
 
   .results { gap: 3px; }
-  .row-item { padding: 14px 16px; border-radius: 18px; gap: 10px; }
-  .row-icon { width: 34px; height: 34px; font-size: 0.85rem; }
-  .row-title { font-size: 0.86rem; }
-  .row-sub { font-size: 0.7rem; }
+  .row-item { padding: 14px 16px 16px; border-radius: 18px; gap: 10px; }
+  .row-icon { width: 28px; height: 28px; font-size: 0.75rem; }
+  .row-title { font-size: 0.88rem; }
+  .row-sub { font-size: 0.64rem; }
   .row-item.row-item-open { border-radius: 18px 18px 0 0; }
-  .row-expand { padding: 4px 16px 16px 60px; border-radius: 0 0 18px 18px; }
-  .row-expand .detail-thumb { margin-left: -44px; }
+  .row-expand { padding: 4px 16px 16px; border-radius: 0 0 18px 18px; }
 
   .onboarding { padding: 20px 12px; align-items: stretch; }
   .onboard-card { padding: 18px; max-width: none; }
