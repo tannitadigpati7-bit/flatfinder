@@ -28,6 +28,9 @@
 </header>
 <main class="share">
   <form id="shareForm">
+    <label>Paste the post's text here to auto-fill the fields below
+      <textarea id="pasteBox" rows="4" placeholder="Facebook/WhatsApp shares usually only carry a link, not the post's caption — copy the actual post text yourself and paste it here to auto-fill BHK/rent/deposit/etc."></textarea>
+    </label>
     <label>Title <input type="text" id="title"></label>
     <label>Location / address <input type="text" id="location" required></label>
     <label>BHK <input type="number" id="bhk" step="0.5" min="0" value="1"></label>
@@ -79,21 +82,42 @@
 <script src="supabase-client.js"></script>
 <script>
   const params = new URLSearchParams(location.search);
-  const sharedText = [params.get("title"), params.get("text"), params.get("url")].filter(Boolean).join("\n");
-  const parsed = FlatFinderParser.parse(sharedText, { sourceUrl: params.get("url") || "" });
+  const sourceUrl = params.get("url") || "";
+  // Deliberately excludes the url from the text handed to the parser — a
+  // bare link with no real title/caption (the common case: Android's
+  // share sheet for a Facebook post usually only carries the link, not
+  // its text) would otherwise get picked up as the "first line" and show
+  // up as the Title, which is misleading rather than useful.
+  const sharedText = [params.get("title"), params.get("text")].filter(Boolean).join("\n");
 
-  const fieldIds = ["title", "location", "bhk", "furnishing", "lift", "rent", "deposit", "brokerageStatus", "ownerStatus", "contact", "source", "link"];
-  fieldIds.forEach((id) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const value = parsed[id];
-    if (value !== null && value !== undefined) el.value = value;
-  });
-  document.getElementById("notes").value = parsed.rawText || "";
+  function fillFieldsFromParsed(parsed) {
+    const fieldIds = ["title", "location", "bhk", "furnishing", "lift", "rent", "deposit", "brokerageStatus", "ownerStatus", "contact", "source", "link"];
+    fieldIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const value = parsed[id];
+      if (value !== null && value !== undefined) el.value = value;
+    });
+    document.getElementById("notes").value = parsed.rawText || "";
 
-  Object.entries(parsed.confidence || {}).forEach(([id, confident]) => {
-    const el = document.getElementById(id);
-    if (el && !confident) el.classList.add("needs-review");
+    document.querySelectorAll(".needs-review").forEach((el) => el.classList.remove("needs-review"));
+    Object.entries(parsed.confidence || {}).forEach(([id, confident]) => {
+      const el = document.getElementById(id);
+      if (el && !confident) el.classList.add("needs-review");
+    });
+  }
+
+  fillFieldsFromParsed(FlatFinderParser.parse(sharedText, { sourceUrl }));
+  document.getElementById("link").value = sourceUrl;
+
+  // Facebook/WhatsApp shares carry only a link, not the post's caption —
+  // pasting the real text here re-parses against it instead, same as the
+  // "+ Add a listing" paste box on the main site.
+  document.getElementById("pasteBox").addEventListener("input", (e) => {
+    const raw = e.target.value.trim();
+    if (!raw) return;
+    fillFieldsFromParsed(FlatFinderParser.parse(raw, { sourceUrl }));
+    document.getElementById("link").value = sourceUrl;
   });
 
   const statusEl = document.getElementById("shareStatus");

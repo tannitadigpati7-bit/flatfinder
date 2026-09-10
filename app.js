@@ -236,10 +236,10 @@ function renderRow(listing) {
   const row = document.createElement("article");
   row.className = `row-item ${color}`;
   row.innerHTML = `
-    <div class="row-icon">${listing.bhk != null ? escapeHtml(String(listing.bhk)) : "🏠"}</div>
-    <div class="row-text">
-      <div class="row-title">${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</div>
+    <div class="row-left">
+      <div class="row-icon">${listing.bhk != null ? escapeHtml(String(listing.bhk)) : "🏠"}</div>
       <div class="row-sub">${escapeHtml(rowSubtitle(listing))}</div>
+      <div class="row-title">${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</div>
     </div>
     <div class="row-amount">${fmtMoney(listing.rent)}${listing.rent != null ? "<span>/mo</span>" : ""}</div>
   `;
