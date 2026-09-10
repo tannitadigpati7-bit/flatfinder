@@ -1,23 +1,30 @@
+/* "Cool Industrial" — dark graphite base, cool-gray surfaces, off-white
+   type, a single restrained mint/teal accent. This is the app's actual
+   identity (not a prefers-color-scheme variant), matching the logo mark's
+   near-black + mint palette. */
 :root {
-  --bg: #fafafa;
-  --surface: #ffffff;
-  --border: #e4e4e7;
-  --text: #18181b;
-  --muted: #71717a;
-  --muted-bg: #f4f4f5;
-  --accent: #2f6f4f;
-  --accent-fg: #ffffff;
-  --accent-muted-bg: #f0f5f2;
-  --accent-muted-fg: #2f6f4f;
-  --danger: #dc2626;
-  --danger-muted-bg: #fef2f2;
-  --danger-muted-fg: #b91c1c;
-  --warn: #d97706;
-  --warn-muted-bg: #fffbeb;
-  --warn-muted-fg: #b45309;
-  --radius: 10px;
-  --radius-sm: 6px;
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --bg: #0d0f11;
+  --surface: #16191c;
+  --surface-2: #1c2023;
+  --border: #262b2f;
+  --text: #eef1f0;
+  --muted: #8b959a;
+  --muted-bg: #1c2023;
+  --accent: #5ed6c4;
+  --accent-fg: #0a1614;
+  --accent-muted-bg: rgba(94, 214, 196, 0.12);
+  --accent-muted-fg: #5ed6c4;
+  --danger: #e08279;
+  --danger-muted-bg: rgba(224, 130, 121, 0.12);
+  --danger-muted-fg: #e08279;
+  --warn: #d7b567;
+  --warn-muted-bg: rgba(215, 181, 103, 0.12);
+  --warn-muted-fg: #d7b567;
+  --radius: 14px;
+  --radius-sm: 9px;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.25), 0 4px 14px rgb(0 0 0 / 0.22);
+  --font-head: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -33,7 +40,7 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-body);
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -41,12 +48,28 @@ body {
 
 header {
   position: relative;
-  padding: 28px 20px 14px;
+  padding: 30px 20px 16px;
   text-align: center;
 }
 
-header h1 { margin: 0 0 4px; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; }
-.subtitle { margin: 0; color: var(--muted); font-size: 0.9rem; }
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.brand-mark svg { display: block; flex-shrink: 0; }
+header h1 {
+  margin: 0 0 4px;
+  font-family: var(--font-head);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  text-transform: lowercase;
+}
+.subtitle { margin: 0; color: var(--muted); font-size: 0.88rem; }
 
 .settings-btn {
   position: absolute;
@@ -198,54 +221,60 @@ button { font-family: inherit; }
 }
 
 /* --------------------------------------------------------- row items */
-/* Card-deck system: each listing is a compact, colored card. Color is
-   per-listing variety (see CARD_PALETTE in app.js), not a status signal —
-   the section a card sits under (Confirmed/Needs Verification/Near
-   Matches) already carries that meaning. Packed tight (3px gap, flat, no
-   shadow) so the list reads as one continuous stack rather than separate
-   floating tiles. First tap expands smoothly in place; tapping the
+/* Card-deck system, restyled for the Cool Industrial identity: uniform
+   cool-gray surfaces (not a full-color fill per card — "minimal visual
+   noise, no generic real-estate colors" rules that out) with a thin
+   left accent bar carrying per-listing variety, still hashed off the
+   listing id (see CARD_PALETTE in app.js) so the same listing always
+   lands on the same accent and the deck doesn't reshuffle on re-render.
+   Packed tight (3px gap, flat) so the list reads as one continuous
+   stack. First tap expands smoothly in place; tapping the
    already-expanded row (or the link inside it) opens the source listing. */
 .row-wrap { display: flex; flex-direction: column; }
-.near-matches .row-wrap { opacity: 0.92; }
+.near-matches .row-wrap { opacity: 0.85; }
 
-.pal-sage     { background: #7f9c85; }
-.pal-blue     { background: #7690ab; }
-.pal-beige    { background: #c3a06c; }
-.pal-orange   { background: #c17c4d; }
-.pal-yellow   { background: #cbab5c; }
-.pal-red      { background: #ad6459; }
-.pal-gray     { background: #96938d; }
-.pal-lavender { background: #9484ab; }
+.pal-sage     { --pal: #7fb39a; }
+.pal-blue     { --pal: #7fa3c9; }
+.pal-beige    { --pal: #c9ab7c; }
+.pal-orange   { --pal: #c98f68; }
+.pal-yellow   { --pal: #cdc07a; }
+.pal-red      { --pal: #c98a83; }
+.pal-gray     { --pal: #9aa3a6; }
+.pal-lavender { --pal: #a498c9; }
 
 .row-item {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 11px 16px;
-  border-radius: 22px;
+  padding: 12px 14px 12px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--pal, var(--border));
+  background: var(--surface);
   cursor: pointer;
-  color: #ffffff;
-  transition: transform 0.1s, filter 0.15s, border-radius 0.25s;
+  color: var(--text);
+  transition: background 0.15s, border-radius 0.25s;
 }
-.row-item:hover { filter: brightness(1.05); }
-.row-item:active { transform: scale(0.99); }
-.row-item.row-item-open { border-radius: 22px 22px 0 0; }
+.row-item:hover { background: var(--surface-2); }
+.row-item:active { background: var(--surface-2); }
+.row-item.row-item-open { border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
 
-/* Compact circular badge, a lighter frosted tint of whatever color sits
-   behind it (works across every palette color without per-color values) —
-   "a deliberate UI element," not just a circle of text. */
+/* Compact circular badge, tinted with the row's accent so it still reads
+   as a deliberate UI element without the whole card being that color. */
 .row-badge {
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.26);
+  background: color-mix(in srgb, var(--pal, var(--muted)) 22%, var(--surface));
+  color: var(--pal, var(--muted));
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 700;
 }
+.row-badge svg { width: 15px; height: 15px; }
 
 .row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 
@@ -254,20 +283,22 @@ button { font-family: inherit; }
    smallest and faded — three distinct visual weights, not one. */
 .row-primary { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .row-location {
-  font-size: 1rem;
-  font-weight: 700;
+  font-family: var(--font-head);
+  font-size: 0.98rem;
+  font-weight: 500;
   letter-spacing: -0.01em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+  color: var(--text);
 }
-.row-rent { flex-shrink: 0; font-size: 1rem; font-weight: 700; }
+.row-rent { flex-shrink: 0; font-family: var(--font-head); font-size: 0.98rem; font-weight: 600; color: var(--text); }
 
 .row-secondary {
-  font-size: 0.76rem;
-  font-weight: 600;
-  opacity: 0.88;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -275,7 +306,8 @@ button { font-family: inherit; }
 .row-tertiary {
   font-size: 0.68rem;
   font-weight: 400;
-  opacity: 0.68;
+  color: var(--muted);
+  opacity: 0.75;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -292,34 +324,22 @@ button { font-family: inherit; }
 .row-expand-outer.open { grid-template-rows: 1fr; }
 .row-expand-inner { overflow: hidden; }
 
-/* Same color as the row above it, seamlessly joined — reads as one card
-   unfolding rather than a popup. Text/borders here are light-on-dark
-   overrides of the shared .tag/.meta/.view-link/etc classes (which
-   default to dark-on-light for the detail dialog fallback). */
+/* Same surface as the row above it, seamlessly joined by the shared
+   left accent bar — reads as one card unfolding rather than a popup. */
 .row-expand {
-  padding: 2px 16px 16px;
-  border-radius: 0 0 22px 22px;
-  color: #ffffff;
+  padding: 2px 16px 16px 15px;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-left: 3px solid var(--pal, var(--border));
+  background: var(--surface);
+  color: var(--text);
   cursor: default;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 .row-expand .detail-thumb { width: calc(100% + 20px); margin: 0 -10px 4px; border-radius: 10px; }
-.row-expand .deposit, .row-expand .commute, .row-expand .owner-line,
-.row-expand .unknowns, .row-expand .fails, .row-expand .why, .row-expand .meta {
-  color: rgba(255, 255, 255, 0.88);
-}
-.row-expand .tag { color: #ffffff; border-color: rgba(255, 255, 255, 0.35); }
-.row-expand .tag.good { background: rgba(255, 255, 255, 0.18); color: #ffffff; }
-.row-expand .meta { border-top-color: rgba(255, 255, 255, 0.25); }
-.row-expand .view-link {
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.3);
-  color: #ffffff;
-}
-.row-expand .view-link:hover { background: rgba(255, 255, 255, 0.26); }
-.row-expand .view-link.disabled { border-style: dashed; color: rgba(255, 255, 255, 0.65); }
 
 /* -------------------------------------------------- detail dialog --- */
 /* Everything a tile doesn't show — opened by tapping a tile. Reuses the
@@ -327,12 +347,14 @@ button { font-family: inherit; }
    old full-size cards used, just rendered into this dialog instead of
    inline in the grid. */
 dialog.detail-dialog {
-  border: none;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 0;
   width: min(480px, 92vw);
   max-height: 90vh;
-  box-shadow: 0 8px 30px rgb(0 0 0 / 0.15);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.45);
 }
 dialog.detail-dialog::backdrop { background: rgba(0,0,0,0.4); }
 
@@ -366,6 +388,9 @@ dialog.detail-dialog::backdrop { background: rgba(0,0,0,0.4); }
   border: 1px solid var(--border);
 }
 .tag.good { background: var(--accent-muted-bg); color: var(--accent-muted-fg); border-color: transparent; }
+
+.icon { display: inline-flex; vertical-align: -2px; margin-right: 5px; color: var(--muted); }
+.icon svg { width: 14px; height: 14px; }
 
 .location, .commute, .owner-line { font-size: 0.88rem; color: var(--text); }
 .owner-line { color: var(--muted); }
@@ -402,7 +427,7 @@ dialog.detail-dialog::backdrop { background: rgba(0,0,0,0.4); }
   font-weight: 500;
   transition: background 0.15s, border-color 0.15s;
 }
-.view-link:hover { background: var(--muted-bg); border-color: #d4d4d8; }
+.view-link:hover { background: var(--muted-bg); border-color: #33393d; }
 .view-link.disabled { border-style: dashed; color: var(--muted); }
 
 .empty-state {
@@ -494,24 +519,28 @@ dialog.detail-dialog::backdrop { background: rgba(0,0,0,0.4); }
 .onboard-explainer { text-align: center; }
 .onboard-explainer h2 { font-size: 1.15rem; margin: 6px 0; }
 .onboard-explainer p { font-size: 0.88rem; color: var(--muted); line-height: 1.5; margin: 8px 0 16px; }
-.onboard-icon { font-size: 2.2rem; }
+.onboard-icon { display: flex; justify-content: center; margin-bottom: 4px; }
 .onboard-swatches { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 16px; }
 .onboard-swatch {
-  padding: 8px 12px;
+  padding: 9px 12px;
   border-radius: var(--radius-sm);
-  color: #ffffff;
-  font-size: 0.82rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.8rem;
   font-weight: 500;
   text-align: left;
 }
 
 dialog#addListingDialog {
-  border: none;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 0;
   width: min(520px, 92vw);
   max-height: 90vh;
-  box-shadow: 0 8px 30px rgb(0 0 0 / 0.15);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.45);
 }
 dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
 
@@ -560,28 +589,6 @@ dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
 #saveAdd { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .parse-status { font-size: 0.82rem; color: var(--muted); min-height: 1.2em; }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0a0a0a;
-    --surface: #18181b;
-    --border: #27272a;
-    --text: #fafafa;
-    --muted: #a1a1aa;
-    --muted-bg: #212124;
-    --accent: #4f9c74;
-    --accent-fg: #06120c;
-    --accent-muted-bg: #16261c;
-    --accent-muted-fg: #6fbf95;
-    --danger: #f87171;
-    --danger-muted-bg: #2a1616;
-    --danger-muted-fg: #f87171;
-    --warn: #eab308;
-    --warn-muted-bg: #2a2110;
-    --warn-muted-fg: #eab308;
-  }
-  .view-link:hover { background: var(--muted-bg); border-color: #3f3f46; }
-}
-
 /* ------------------------------------------------------- mobile layout */
 @media (max-width: 640px) {
   header { padding: 20px 16px 10px; }
@@ -609,13 +616,12 @@ dialog#addListingDialog::backdrop { background: rgba(0,0,0,0.4); }
   #addListingBtn { width: 100%; min-height: 44px; font-size: 0.95rem; }
 
   .results { gap: 3px; }
-  .row-item { padding: 9px 13px; border-radius: 18px; gap: 10px; }
-  .row-badge { width: 30px; height: 30px; font-size: 0.75rem; }
+  .row-item { padding: 10px 12px 10px 11px; gap: 10px; }
+  .row-badge { width: 29px; height: 29px; font-size: 0.75rem; }
   .row-location, .row-rent { font-size: 0.9rem; }
   .row-secondary { font-size: 0.72rem; }
   .row-tertiary { font-size: 0.64rem; }
-  .row-item.row-item-open { border-radius: 18px 18px 0 0; }
-  .row-expand { padding: 2px 13px 13px; border-radius: 0 0 18px 18px; }
+  .row-expand { padding: 2px 12px 12px 11px; }
 
   .onboarding { padding: 20px 12px; align-items: stretch; }
   .onboard-card { padding: 18px; max-width: none; }

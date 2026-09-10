@@ -4,30 +4,31 @@
 <meta charset="UTF-8">
 <title>FlatFinder Capture</title>
 <style>
-  body { width: 360px; font: 13px/1.4 system-ui, sans-serif; margin: 0; padding: 12px; color: #1a1a1a; }
-  h1 { font-size: 14px; margin: 0 0 8px; }
-  .hint { color: #666; font-size: 11px; margin: 0 0 10px; }
+  body { width: 360px; font: 13px/1.4 system-ui, sans-serif; margin: 0; padding: 12px; color: #eef1f0; background: #0d0f11; }
+  h1 { font-size: 14px; margin: 0 0 8px; font-weight: 600; }
+  .hint { color: #8b959a; font-size: 11px; margin: 0 0 10px; }
   textarea { width: 100%; box-sizing: border-box; resize: vertical; }
-  label { display: block; margin-top: 8px; font-size: 12px; font-weight: 600; }
+  label { display: block; margin-top: 8px; font-size: 12px; font-weight: 600; color: #8b959a; }
   input[type=text], input[type=number], input[type=url], textarea, select {
     width: 100%; box-sizing: border-box; padding: 5px 6px; margin-top: 2px;
-    border: 1px solid #ccc; border-radius: 4px; font: inherit;
+    border: 1px solid #262b2f; border-radius: 6px; font: inherit;
+    background: #16191c; color: #eef1f0;
   }
   .row { display: flex; gap: 8px; }
   .row > div { flex: 1; }
   .actions { display: flex; gap: 8px; margin-top: 12px; }
-  button { flex: 1; padding: 7px; border-radius: 4px; border: 1px solid #999; background: #f5f5f5; cursor: pointer; font: inherit; }
-  #save { background: #2f6f4f; color: #fff; border-color: #2f6f4f; }
+  button { flex: 1; padding: 7px; border-radius: 6px; border: 1px solid #262b2f; background: #1c2023; color: #eef1f0; cursor: pointer; font: inherit; }
+  #save { background: #5ed6c4; color: #0a1614; border-color: #5ed6c4; font-weight: 600; }
   #status { margin-top: 8px; font-size: 12px; min-height: 16px; }
-  #status.ok { color: #1a7d1a; }
-  #status.err { color: #b3261e; }
+  #status.ok { color: #5ed6c4; }
+  #status.err { color: #e08279; }
   #matchStatus { margin-top: 6px; font-size: 12px; font-weight: 600; }
-  #matchStatus.confirmed { color: #1a7d1a; }
-  #matchStatus.needs_verification { color: #b8862f; }
-  #matchStatus.rejected { color: #b3261e; }
-  details { margin-top: 10px; border-top: 1px solid #eee; padding-top: 6px; }
-  summary { cursor: pointer; font-size: 12px; color: #555; }
-  .needs-review { border-color: #e8a319 !important; background: #fffaf0; }
+  #matchStatus.confirmed { color: #5ed6c4; }
+  #matchStatus.needs_verification { color: #d7b567; }
+  #matchStatus.rejected { color: #e08279; }
+  details { margin-top: 10px; border-top: 1px solid #262b2f; padding-top: 6px; }
+  summary { cursor: pointer; font-size: 12px; color: #8b959a; }
+  .needs-review { border-color: #d7b567 !important; background: rgba(215, 181, 103, 0.08); }
 </style>
 </head>
 <body>

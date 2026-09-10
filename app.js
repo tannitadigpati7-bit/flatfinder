@@ -12,6 +12,12 @@ let REQ = {};
 let OFFICE_ADDRESS = "";
 let OFFICE_NAME = "the office";
 
+// Thin-line SVG icons (Cool Industrial identity — no emoji in the UI chrome).
+// currentColor lets each usage site set its own color via CSS.
+const ICON_PIN = '<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 14.5s5-4.2 5-8.2a5 5 0 1 0-10 0c0 4 5 8.2 5 8.2Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="8" cy="6.3" r="1.8" stroke="currentColor" stroke-width="1.3"/></svg>';
+const ICON_CAR = '<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.5 9.5 3.6 6a1 1 0 0 1 .95-.7h6.9a1 1 0 0 1 .95.7l1.1 3.5" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><rect x="2" y="9.5" width="12" height="3" rx="1" stroke="currentColor" stroke-width="1.3"/><circle cx="4.5" cy="12.5" r="1" fill="currentColor"/><circle cx="11.5" cy="12.5" r="1" fill="currentColor"/></svg>';
+const ICON_HOME = '<svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.5 7.5 8 3l5.5 4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 6.8V13h8V6.8" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>';
+
 function applyProfile(profile) {
   REQ = profile.requirements;
   OFFICE_ADDRESS = profile.officeAddress;
@@ -206,7 +212,7 @@ function renderExpandContent(listing) {
     `);
   }
 
-  parts.push(`<div class="commute">🚗 ${listing.commute_minutes != null ? Math.round(listing.commute_minutes) + " min" : "UNKNOWN"} to ${escapeHtml(OFFICE_NAME)}${listing.commute_source === "google_distance_matrix_traffic" ? " (traffic-aware)" : listing.commute_source === "osrm_driving" ? " (no live traffic)" : ""}</div>`);
+  parts.push(`<div class="commute"><span class="icon">${ICON_CAR}</span>${listing.commute_minutes != null ? Math.round(listing.commute_minutes) + " min" : "UNKNOWN"} to ${escapeHtml(OFFICE_NAME)}${listing.commute_source === "google_distance_matrix_traffic" ? " (traffic-aware)" : listing.commute_source === "osrm_driving" ? " (no live traffic)" : ""}</div>`);
 
   if (kind === "confirmed") {
     parts.push(`<div class="owner-line">${listing.owner_status === "owner" ? "Owner-direct ✓" : "Owner/broker status UNKNOWN"}</div>`);
@@ -248,7 +254,7 @@ function renderRow(listing) {
   const row = document.createElement("article");
   row.className = `row-item ${color}`;
   row.innerHTML = `
-    <div class="row-badge">${listing.bhk != null ? escapeHtml(String(listing.bhk)) : "🏠"}</div>
+    <div class="row-badge">${listing.bhk != null ? escapeHtml(String(listing.bhk)) : ICON_HOME}</div>
     <div class="row-main">
       <div class="row-primary">
         <span class="row-location">${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</span>
@@ -327,8 +333,8 @@ function renderDetailContent(listing) {
     `);
   }
 
-  parts.push(`<div class="location">📍 ${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</div>`);
-  parts.push(`<div class="commute">🚗 ${listing.commute_minutes != null ? Math.round(listing.commute_minutes) + " min" : "UNKNOWN"} to ${escapeHtml(OFFICE_NAME)}${listing.commute_source === "google_distance_matrix_traffic" ? " (traffic-aware)" : listing.commute_source === "osrm_driving" ? " (no live traffic)" : ""}</div>`);
+  parts.push(`<div class="location"><span class="icon">${ICON_PIN}</span>${escapeHtml(listing.location || listing.address || "Location UNKNOWN")}</div>`);
+  parts.push(`<div class="commute"><span class="icon">${ICON_CAR}</span>${listing.commute_minutes != null ? Math.round(listing.commute_minutes) + " min" : "UNKNOWN"} to ${escapeHtml(OFFICE_NAME)}${listing.commute_source === "google_distance_matrix_traffic" ? " (traffic-aware)" : listing.commute_source === "osrm_driving" ? " (no live traffic)" : ""}</div>`);
 
   if (kind === "confirmed") {
     parts.push(`<div class="owner-line">${listing.owner_status === "owner" ? "Owner-direct ✓" : "Owner/broker status UNKNOWN"}</div>`);
